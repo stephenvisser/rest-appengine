@@ -15,6 +15,9 @@ from com.dreamiam import parser
 from com.dreamiam.model import * #@UnusedWildImport
 
 class MalformedURLException(Exception):
+    '''
+    This is a special exception for when the URL can't be handled
+    ''' 
     def __init__(self, message):
         Exception.__init__()
         self.message = message
@@ -22,20 +25,26 @@ class MalformedURLException(Exception):
 class Rest(webapp2.RequestHandler):
     '''
     This class provides a RESTful API from which we can
-    completely control our data model
+    completely control our data model. It should be self-documenting to
+    a certain degree
     '''
         
     def post(self):
-        logging.getLogger().info('The type is %s' % self.request.content_type)
+        '''Handles POST requests'''
         if self.request.content_type == 'application/json':
             #Simple: Load the JSON values that were sent to the server
             newObj = parser.put_model_obj(self.request.body)
         elif self.request.content_type.startswith('multipart/form-data'):
-            #Load the ROOT entity with JSON, and then add the sound part
+            
+            #Iterate through all the fields in this multipart request
             itemIter = iter(self.request.POST.items())
-            #We don't care what the root property name is
-            root_json_string = itemIter.next()[1]
-            root_dict = json.loads(root_json_string)
+            #We don't care what the root property name is, just the value
+            root_json_value = itemIter.next()[1]
+            
+            #We are cheating a little by adding the properties in the data parts
+            #of the multipart requests in as strings. This is just to avoid
+            #multiple writes to the DB.
+            root_dict = json.loads(root_json_value)
 
             for next_prop_name, next_form_field in itemIter:
                 data_key = Data(data=db.Blob(next_form_field.value),contentType=next_form_field.type).put()
@@ -45,23 +54,14 @@ class Rest(webapp2.RequestHandler):
         else:
             raise NotImplementedError('We don\'t support this content-type %s' 
                                       % self.request.content_type)
-        
+            
+        #Write back the id of the new object
         self.response.write(str(newObj.key().id()))
-
-        #TODO Notifications should be pushed to the app
-
-        #TODO We should check if the user already has the deviceToken that was
-        #used to make the journal entry
-
-        #TODO Push Notifications could use badges in the future
-
-        #This isn't really efficient, but for now, we will refresh the
-        #memcache value tags list every time we push a new value to the
-        #server.
         
     def _convert_filter_to_type(self,model_cls, property_name, filter_value):
         '''Converts a filter value to its appropriate data type based on its property value'''
 
+        #Gets the data_type (Property objects we define on our model objects)
         attrType = getattr(model_cls, property_name).data_type
 
         if issubclass(attrType, basestring):
@@ -72,53 +72,60 @@ class Rest(webapp2.RequestHandler):
             queryValue = db.Key.from_path(attrType.__name__, int(filter_value))
         else:
             raise MalformedURLException("We can't handle a filter on property \
-                '%s' in class '%s' of type: '%s'" % [property_name, model_cls, attrType])
+                '%s' in class '%s' of type: '%s'" % (property_name, model_cls, attrType))
         return queryValue
 
-    def _write_all_objects_of_type(self, model_type):
+
+    def _perform_filter(self, cls, propertyFilter):
+        '''Performs a search for all items in a filter'''
         allItems = []
+        filter_result = re.match(r'(?P<property_name>/w+):(?P<filter_value>/w+)', propertyFilter)
+        if not filter_result:
+            raise MalformedURLException("The filter is malformed: '%s'" % propertyFilter)
+        
+        #=======================================================================
+        # Create local variables for all the request variables
+        #=======================================================================
+        load_content = self.request.get('load_content')
+        existPolicy = self.request.get('non_exist')
+        prop_name = filter_result.group('property_name')
+        filter_value = filter_result.group('filter_value')
+        
+        
+        converted_filter_value = self._convert_filter_to_type(cls, prop_name,filter_value)
+        #Iterate through the responses
+        for item in cls.gql('WHERE %s = :1' % prop_name, converted_filter_value):
+            if load_content == 'all':
+                allItems.append(item)
+            else:
+                allItems.append(item.key())
+        
+        #If the policy is to create an object if it doesn't already exist,
+        #we should do that here
+        if len(allItems) == 0 and existPolicy == 'create':
+            brandNewObj = cls(**{prop_name:filter_value})
+            bnoKey = brandNewObj.put()
+            if load_content == 'none':
+                allItems.append(bnoKey)
+            else:
+                allItems.append(brandNewObj)
+        return allItems
+
+    def _write_all_objects_of_type(self, model_type):
+        '''This finds all objects of a given type and writes them as a response'''
         cls = globals()[model_type]
 
         propertyFilter = self.request.get('filter')
         if propertyFilter:
-            #If we are filtering by a property
-            filter_result = re.match(r'(?P<property_name>/w+):(?P<filter_value>/w+)',propertyFilter)
-            if not filter_result:
-                raise MalformedURLException("The filter is malformed: '%s'" % propertyFilter)
-
-            allContentBool = self.request.get('load_content') == 'all'
-
-            converted_filter_value = self._convert_filter_to_type(cls, 
-                        filter_result.group('property_name'), 
-                        filter_result.group('filter_value'))
-
-            #Iterate through the responses
-            for item in cls.gql('WHERE %s = :1' % filter_result.group('property_name'),
-                                 converted_filter_value):
-                if allContentBool:
-                    allItems.append(item)
-                else:
-                    allItems.append(item.key())
-            
-            #If the policy is to create an object if it doesn't already exist,
-            #we should do that here
-            existPolicy = self.request.get('non_exist')
-            if len(allItems) == 0 and existPolicy == 'create':
-                brandNewObj = cls(**{filter_result.group('property_name'): 
-                        filter_result.group('filter_value')})
-                bnoKey = brandNewObj.put()
-                loadContentPolicy = self.request.get('load_content')
-                if loadContentPolicy == 'none':
-                    allItems.append(bnoKey)
-                else:
-                    allItems.append(brandNewObj)
+            #Finds all items that match the filter
+            allItems = self._perform_filter(cls, propertyFilter)
 
         else:    
             #Finds the class that was specified from our list of global objects
             #and create a Query for all of these objects. Then iterate through
             #and collect the IDs
             keysOnlyBool = self.request.get('load_content') != 'all'
-
+            allItems = []
             for item in cls.all(keys_only=keysOnlyBool):
                 allItems.append(item)
 
@@ -127,8 +134,12 @@ class Rest(webapp2.RequestHandler):
         self.response.write(parser.get_json_string(allItems))
         
     def _write_object_with_id(self, model_type, model_id):
-        #Convert the ID to an int, create a key and retrieve the object
-                
+        '''
+        Writes an entity back to the client based on id. If the entity is
+        of type Data, just the data will be written with the content-type
+        with which it was stored. Otherwise, it will be json
+        '''
+
         if model_type == 'Data':
             #Convert the content-type to string or else badness happens
             data = db.get(db.Key.from_path(model_type, model_id))
@@ -137,8 +148,6 @@ class Rest(webapp2.RequestHandler):
         else:
             obj_key = db.Key.from_path(model_type, model_id)
             objectString = parser.get_json_string(obj_key)
-#            logging.getLogger().warn('The object: %s' % objectString)
-            logging.getLogger().warn('Retrieved: %s from key: %s with type: %s and id %d' % (objectString, str(obj_key), model_type, model_id))
 
 
             #Return the values in the entity dictionary
@@ -146,6 +155,8 @@ class Rest(webapp2.RequestHandler):
             self.response.write(objectString)
             
     def _write_all(self):
+        '''Writes every single entity stored in the DB'''
+
         allEntities = []
         for k in metadata.Kind.all():
             if not k.kind_name.startswith('_'):
@@ -155,7 +166,8 @@ class Rest(webapp2.RequestHandler):
         self.response.write(parser.get_json_string(allEntities))
     
     def get(self):
-        match = re.match(r'^/api(?:/(?P<type>\w+))?(?:/(?P<id>\d+))?$',
+        '''Handles any and all 'get' requests'''
+        match = re.match(r'^/api(?:/(?P<type>\w+)(?:/(?P<id>\d+))?)?$',
                          self.request.path_info)
         if match:
             objectType = match.group('type')
@@ -174,8 +186,9 @@ class Rest(webapp2.RequestHandler):
                             % self.request.path_info)
 
     def delete(self):
+        '''Deletes an entity as specified'''
         logging.getLogger().warn(self.request.path_info)
-        match = re.match(r'^/api(?:/(?P<type>\w+))?(?:/(?P<id>\w+))?$',
+        match = re.match(r'^/api(?:/(?P<type>\w+)(?:/(?P<id>\w+))?)?$',
                          self.request.path_info)
         if match:
             object_type = match.group('type') 
@@ -190,19 +203,22 @@ class Rest(webapp2.RequestHandler):
                         db.delete(getattr(returned_obj,property_to_delete))
                     db.delete(deleteObjKey)
                 else:
-                    keysOnlyBool = property_to_delete == None
-                    for key in globals()[object_type].all(keys_only=keysOnlyBool):
-                        if property_to_delete:
-                            db.delete(getattr(key,property_to_delete))
-                        db.delete(key)
+                    if self.request.get('force') == 'yes':
+                        keysOnlyBool = property_to_delete == None
+                        for key in globals()[object_type].all(keys_only=keysOnlyBool):
+                            if property_to_delete:
+                                db.delete(getattr(key,property_to_delete))
+                            db.delete(key)
+                    else:
+                        raise SyntaxError("MUST use 'force'='yes' to do this mode of delete")
             else:
-                if self.request.get('force'):
+                if self.request.get('force') == 'yes':
                     for k in metadata.Kind.all():
                         if not k.kind_name.startswith('_'):
                             for o in globals()[k.kind_name].all(keys_only=True):
                                 db.delete(o)
                 else:
-                    raise Exception("If you are trying to delete everything, use 'force'")
+                    raise SyntaxError("MUST use 'force'='yes' to do this mode of delete")
         else:
             raise MalformedURLException('Error when parsing URL - invalid syntax: %s' 
                                         % self.request.path_info)

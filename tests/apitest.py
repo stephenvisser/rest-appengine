@@ -19,7 +19,7 @@ class Test(unittest.TestCase):
     def setUp(self):
         self.proc_id = subprocess.Popen('/usr/local/google_appengine/dev_appserver.py\
                                          --skip_sdk_update_check --port 8080 -c \
-                                          /Users/visser/Development/dreamiam',
+                                          /Users/visser/Development/dreamiam/src',
                                            shell=True)
         time.sleep(4)
         
@@ -165,7 +165,7 @@ class Test(unittest.TestCase):
                          '__id':newObjId,
                          'tags':['one'],
                          'location':{'__type':'GeoPt', 'lat':-32.124, 'lon':123.543}}, 
-                             newObjResult, 
+                             newObjResult,
                              'returned from server correctly?')        
         
     def tearDown(self):

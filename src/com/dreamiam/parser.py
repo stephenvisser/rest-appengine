@@ -18,10 +18,10 @@ def dict_from_key(key):
 
 def put_model_obj(json_string):
     '''
-    Converts a string to a Model object as necessary
-    Returns an OBJ of the string that was stored.
-    NOTE: AUTOMATICALLY STORES THE OBJECT;
-    This is to make parsing this information more performant
+    Converts a string to the requesite Model object. Returns the object that
+    was created from the string. NOTE that the objects (they may be nested) are
+    all stored implicitly and there is no way to turn this off for now. The
+    reason for this behaviour is to make parsing these objects faster.
     '''
     list_of_objects = []
     def _hook_to_object(dct):
@@ -29,13 +29,14 @@ def put_model_obj(json_string):
         This is the method that is called every time we are decoding a JSON
         object. Since objects must be stored as their keys, this method makes
         the assumption that if only the __type and __id properties are present,
-        we will just create a reference. If the additional properties are 
+        we will just create a reference. If any additional properties are 
         present AND __id, then we will overwrite the existing object without 
         any discernment. Finally, if no __id is present, we will store this as
         a brand new object
         '''
         try:
             #Retrieves the class type and ID which are special tags
+            #WILL THROW KeyError if '__type' tag doesn't exist
             clsType = dct[CLASS_TYPE_STR]
             #Using get() here means we won't get a KeyError (just None)
             clsId = dct.get(ID_STR)
@@ -44,12 +45,14 @@ def put_model_obj(json_string):
                 #If only the __type and __id properties exist
                 return Key.from_path(clsType, clsId)
 
+            #Keys in JSON object that start with '__' are reserved.
             dictCopy = dict((key, value) for key, value in dct.iteritems() if not key.startswith('__'))
             
             try:
                 if clsId:
                     #If there is an __id property, we should set the key of the
-                    #object too
+                    #object too in the next line. This can only be set in the
+                    #constructor
                     dictCopy['key'] = Key.from_path(clsType, clsId)
 
                 #This line is slightly confusing. It will look up the desired
@@ -58,9 +61,12 @@ def put_model_obj(json_string):
                 newObj = globals()[clsType](**dictCopy)
             
                 if isinstance(newObj, Model):
-                    #We are populating a list of objects that are to be stored
-                    #implicitly into the DB. The last one added will be our root
-                    #object
+                    #We are keeping track of all the objects we are implicitly
+                    #adding to the DB. This is the only way I could find to keep
+                    #track of the actual objects so that we could return objects
+                    #rather than keys; the nature of the recursive parsing will
+                    #guarantee that the last object appended to this list will 
+                    #be the root object
                     list_of_objects.append(newObj)
                     return newObj.put()
                 return newObj
@@ -76,10 +82,14 @@ def put_model_obj(json_string):
             raise newErr
 
     json.loads(json_string, object_hook=_hook_to_object)
+    #Return the last object in the list. This will be the root
     return list_of_objects[-1]
 
 def get_json_string(model_object_key):
-    '''Converts a Model object to a string we can send to the server'''
+    '''
+    Uses a Model object KEY to retrieve the actual object and then return
+    its string value.
+    '''
     return json.dumps(db.get(model_object_key), cls=_ExtendedJSONEncoder)
 
 class _ExtendedJSONEncoder(json.JSONEncoder):
