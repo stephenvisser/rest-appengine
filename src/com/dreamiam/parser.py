@@ -90,7 +90,11 @@ def get_json_string(model_object_key):
     Uses a Model object KEY to retrieve the actual object and then return
     its string value.
     '''
-    return json.dumps(db.get(model_object_key), cls=_ExtendedJSONEncoder)
+    result = db.get(model_object_key)
+    if result:
+        return json.dumps(result, cls=_ExtendedJSONEncoder)
+    else:
+        raise Exception('Entity of type %s with id %d does not exist'%(model_object_key.kind(),model_object_key.id()))
 
 class _ExtendedJSONEncoder(json.JSONEncoder):
     '''Custom Encoder that can handle Model objects'''

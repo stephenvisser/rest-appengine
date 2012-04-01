@@ -18,9 +18,7 @@ class MalformedURLException(Exception):
     '''
     This is a special exception for when the URL can't be handled
     ''' 
-    def __init__(self, message):
-        Exception.__init__()
-        self.message = message
+    pass
 
 class Rest(webapp2.RequestHandler):
     '''
@@ -31,32 +29,38 @@ class Rest(webapp2.RequestHandler):
         
     def post(self):
         '''Handles POST requests'''
-        if self.request.content_type == 'application/json':
-            #Simple: Load the JSON values that were sent to the server
-            newObj = parser.put_model_obj(self.request.body)
-        elif self.request.content_type.startswith('multipart/form-data'):
-            
-            #Iterate through all the fields in this multipart request
-            itemIter = iter(self.request.POST.items())
-            #We don't care what the root property name is, just the value
-            root_json_value = itemIter.next()[1]
-            
-            #We are cheating a little by adding the properties in the data parts
-            #of the multipart requests in as strings. This is just to avoid
-            #multiple writes to the DB.
-            root_dict = json.loads(root_json_value)
 
-            for next_prop_name, next_form_field in itemIter:
-                data_key = Data(data=db.Blob(next_form_field.value),contentType=next_form_field.type).put()
-                root_dict[next_prop_name] = parser.dict_from_key(data_key)
-            
-            newObj = parser.put_model_obj(json.dumps(root_dict))
+        match = re.match(r'^/api$',
+                         self.request.path_info)
+        if match:
+            if self.request.content_type == 'application/json':
+                #Simple: Load the JSON values that were sent to the server
+                newObj = parser.put_model_obj(self.request.body)
+            elif self.request.content_type.startswith('multipart/form-data'):
+                
+                #Iterate through all the fields in this multipart request
+                itemIter = iter(self.request.POST.items())
+                #We don't care what the root property name is, just the value
+                root_json_value = itemIter.next()[1]
+                
+                #We are cheating a little by adding the properties in the data parts
+                #of the multipart requests in as strings. This is just to avoid
+                #multiple writes to the DB.
+                root_dict = json.loads(root_json_value)
+
+                for next_prop_name, next_form_field in itemIter:
+                    data_key = Data(data=db.Blob(next_form_field.value),contentType=next_form_field.type).put()
+                    root_dict[next_prop_name] = parser.dict_from_key(data_key)
+                
+                newObj = parser.put_model_obj(json.dumps(root_dict))
+            else:
+                raise NotImplementedError('We don\'t support this content-type %s' 
+                                          % self.request.content_type)
+                
+            #Write back the id of the new object
+            self.response.write(str(newObj.key().id()))
         else:
-            raise NotImplementedError('We don\'t support this content-type %s' 
-                                      % self.request.content_type)
-            
-        #Write back the id of the new object
-        self.response.write(str(newObj.key().id()))
+            raise MalformedURLException("When posting, we only support the '/api' URL")
         
     def _convert_filter_to_type(self,model_cls, property_name, filter_value):
         '''Converts a filter value to its appropriate data type based on its property value'''
@@ -148,8 +152,6 @@ class Rest(webapp2.RequestHandler):
         else:
             obj_key = db.Key.from_path(model_type, model_id)
             objectString = parser.get_json_string(obj_key)
-
-
             #Return the values in the entity dictionary
             self.response.headers['Content-Type'] = "application/json"
             self.response.write(objectString)
@@ -182,8 +184,7 @@ class Rest(webapp2.RequestHandler):
             else:
                 self._write_all()
         else:
-            raise MalformedURLException('Error when parsing URL - invalid syntax: %s' 
-                            % self.request.path_info)
+            raise MalformedURLException('Error when parsing URL - invalid syntax: %s' % self.request.path_info)
 
     def delete(self):
         '''Deletes an entity as specified'''
