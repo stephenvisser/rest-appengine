@@ -26,7 +26,7 @@ ModalNamer = Backbone.View.extend({
 		//In order to move the focus to the main input box when
 		//the modal is shown, we bind to the bootstrap event 'shown'
 		this.$el.on('shown', function (event) {
-			nameInput.focus()});
+			nameInput.focus();});
 	},
 	//These events represent any handling that the view needs
 	//The only event we're interested in is when the allDone button
@@ -45,7 +45,7 @@ ModalNamer = Backbone.View.extend({
 			this.model.set("__type",this.$('input').val());
 			this.$el.modal('hide');
 		}
-})
+});
 
 //Our model couldn't be simpler. The only thing we need done is to keep
 //the intrinsic Model id property in sync with the '__id' property.
@@ -65,7 +65,7 @@ EntityWidget = Backbone.View.extend({
 		this.render();
 		//We listen to the change and destroy backbone events on
 		//the model
-		this.model.on('change', function(){this.render()}, this);
+		this.model.on('change', function(){this.render();}, this);
 		this.model.on('destroy', function(){
 				//TODO: we need to do something when destroy succeeds
 			},this);
@@ -115,12 +115,12 @@ EntityWidget = Backbone.View.extend({
 	//the user knows they are entering an appropriately formatted 
 	//property
 	check:function(currentText){
-		for (option in typeOptions)
+		for (var anOption in typeOptions)
 		{
-			if (currentText == typeOptions[option])
+			if (currentText == typeOptions[anOption])
 			{
 				this.$('#value-control').addClass("success");
-				this.$('#value-control').find('.help-inline').html('-> ' + typeOptions[option]);
+				this.$('#value-control').find('.help-inline').html('-> ' + typeOptions[anOption]);
 				return;
 			}			
 		}
@@ -156,14 +156,14 @@ EntityWidget = Backbone.View.extend({
 		else if(result=="here")
 		{
 			result = latitude.toString()+ "," + longitude.toString();
-		}    		
+		}
 		else if(result=="now")
 		{
 			result = new Date().toISOString();
 		}
 		else if(/^\d+$/.test(result))
 		{
-			result = parseInt(result);		
+			result = parseInt(result, 10);		
 		}
 		else if(/^\d*\.\d+$/.test(result))
 		{
@@ -180,7 +180,7 @@ EntityWidget = Backbone.View.extend({
 		//Sets the focus to the key box every time the widget is rendered.
 		this.$('#new-key').focus();
 	}
-})
+});
 
 //The sync class is what backbone uses to sync to the server. It 
 //uses a weird method, so I'm doing all the $.ajax calls manually.
@@ -193,7 +193,7 @@ Backbone.sync = function(method, model) {
 	{
 		//Creates the post request and then sets the id on success.
 		$.ajax({type:"POST",contentType:"application/json", data:JSON.stringify(model),url:'/api',success:function(data, textStatus, jqXHR){
-			model.set("__id",parseInt(data));	    	
+			model.set("__id",parseInt(data, 10));
 		}});
 	}
 	else if (method=="delete")
@@ -204,7 +204,7 @@ Backbone.sync = function(method, model) {
 	else
 	{
 		//Creates the get request and populates all fields upon success
-		$.ajax({url:'/api/'+model.get('__type')+'/'+model.get('__id'), success:function(data, textStatus, jqXHR){        	
+		$.ajax({url:'/api/'+model.get('__type')+'/'+model.get('__id'), success:function(data, textStatus, jqXHR){
 			model.set(data);
 			}
 		});
@@ -218,12 +218,12 @@ $(function(){
 	//so we should do more checking here eventually.
 	navigator.geolocation.getCurrentPosition(function (position) {
 		latitude = position.coords.latitude;
-		longitude = position.coords.longitude
+		longitude = position.coords.longitude;
 	});
 	
 	//Create the current model which doesn't have anything yet.
-	var currentModel = new ModelEntity()
-	
+	var currentModel = new ModelEntity();
+
 	//Create the widget that manages the model
 	var newWidget = new EntityWidget({model:currentModel});
 	
