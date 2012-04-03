@@ -15,6 +15,7 @@
 <td><%=key%></td><td> :</td> <td><%=value%></td><td> <button class="doSomething btn-small">Delete</button></td>
 </script>
 
+<!-- TODO: We should format objects here -->
 <script type="text/template" id="entity-body">
     <h3>Existing Properties</h3>
     <table class="table table-striped">
@@ -36,9 +37,8 @@
     <button type="button" class="btn btn-primary save">Save</button> <button type="button" class="btn btn-danger delete">Delete</button> <button type="button" class="btn btn-warning retrieve">Retrieve</button>
 </script>
 
-<script type="text/html" id="modal-body">
+<script type="text/html" id="modal-body-template">
   <div class="modal-header">
-    <a class="close" data-dismiss="modal">×</a>
     <h3>Enter name</h3>
   </div>
   <div class="modal-body">
