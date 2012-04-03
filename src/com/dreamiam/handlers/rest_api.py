@@ -223,5 +223,3 @@ class Rest(webapp2.RequestHandler):
         else:
             raise MalformedURLException('Error when parsing URL - invalid syntax: %s' 
                                         % self.request.path_info)
-        
-app = webapp2.WSGIApplication([('/api.*', Rest)], debug=True)

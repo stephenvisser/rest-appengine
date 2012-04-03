@@ -5,5 +5,15 @@ api_version: 1
 threadsafe: true
 
 handlers:
-- url: /api.*
-  script: com.dreamiam.rest_api.app
+- url: /dashboard
+  static_files: web/index.html
+  upload: web/index.html
+
+- url: /web/(.*)
+  static_files: web/\1
+  upload: web/(.*)
+
+- url: .*
+  script: com.dreamiam.handlers.app
+  
+  

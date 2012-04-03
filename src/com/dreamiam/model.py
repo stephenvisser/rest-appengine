@@ -6,13 +6,7 @@ Created on Mar 22, 2012
 from google.appengine.ext import db
 
 #===============================================================================
-# This is the section where we should include all db types that should be 
-# automatically parsed.
-#===============================================================================
-GeoPt = db.GeoPt
-
-#===============================================================================
-# These are all the user-defined model classes are.
+# These are all the user-defined model classes.
 #===============================================================================
 
 class User(db.Model):
@@ -29,7 +23,7 @@ class Entry(db.Model):
     """Models an entry in the journal"""
     tags = db.StringListProperty();
     user = db.ReferenceProperty(User);
-    timestamp = db.IntegerProperty();
+    timestamp = db.StringProperty();
     location = db.GeoPtProperty();
     sound = db.ReferenceProperty(Data);
     description = db.TextProperty();
