@@ -5,7 +5,7 @@ ModalNamer = Backbone.View.extend({
         this.render();
     },
     tagName: 'div',
-    className: 'modal',    
+    className: 'modal fade',    
     render: function(){
         this.el.innerHTML = $('#modal-body').html();
         var nameInput = this.$('input');
