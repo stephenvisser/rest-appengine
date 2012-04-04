@@ -269,6 +269,8 @@ ExplorerWidget = Backbone.View.extend({
 	initialize:function(options){
 		//Add the widget to the body.
 		$('#main-content').html(this.currentMainView.el);
+		this.$el.html($('#sidebar-template').html());
+		this.$('#new-entity-sidebar').html(new NewEntityWidget().el);
 		
 		//Register to listen to the add content event.
 		dispatcher.on(DO_APP_CONTENT_CHANGE_EVENT,function(newModel){
@@ -405,7 +407,6 @@ ExplorerWidget = Backbone.View.extend({
 	//Keeps a list of all child widgets because we need to clear them
 	//out each time.
 	allEntityWidgets:[],
-	searchWidget:new NewEntityWidget(),
 	//Does house-cleaning so we don't have zombie objects
 	cleanupOldEntityWidgets:function(){
 		for (var item in this.allEntityWidgets)
@@ -415,33 +416,29 @@ ExplorerWidget = Backbone.View.extend({
 	},
 	//Rendering takes a template and creates the guts of widget.
 	render: function(){
-		this.$el.html($('#sidebar-template').html());
 		this.cleanupOldEntityWidgets();
 
+		this.$("#sidebar-list").empty();
 		for (var item in this.collections)
 		{
 			var collection = this.collections[item];
-			var newList = $(document.createElement('ul')).addClass('nav nav-list');
 			var title = $(document.createElement('li')).addClass('nav-header');
 			title.html(collection.type);
-			newList.append(title);
+			this.$("#sidebar-list").append(title);
 				
 			for (var i = 0; i < collection.length; i++){
 					var newWidget = new EntitySidebarWidget({model:collection.at(i)});
 					this.allEntityWidgets.push(newWidget);
-					newList.append(newWidget.el);
+					this.$("#sidebar-list").append(newWidget.el);
 			}
-			this.$el.append(newList);
 		}
 		
 		//This is the only way to see how many keys exist for this
 		//object
 		if (Object.keys(this.collections).length === 0)
 		{
-			this.$el.append($('#alert-template').html());
+			this.$('#sidebar-list').append($('#alert-template').html());
 		}
-
-		this.$el.append(this.searchWidget.el);		
 	}
 });
 
