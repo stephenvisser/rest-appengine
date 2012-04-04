@@ -4,7 +4,7 @@
 var latitude,longitude;
 
 //These are shortcuts that users can type to enter special things
-var typeOptions = ['null', 'true', 'false', 'here', 'now'];
+var typeOptions = ['null', 'true', 'false', 'here', 'now', 'file'];
 
 //This is a handy way of passing events inside the application
 var dispatcher = _.clone(Backbone.Events);
@@ -12,26 +12,36 @@ var dispatcher = _.clone(Backbone.Events);
 var DO_APP_CONTENT_CHANGE_EVENT = 'app:set';
 var DID_APP_CONTENT_CHANGE_EVENT = 'app:change';
 
-//Our model couldn't be simpler. The only thing we need done is to keep
-//the intrinsic Model id property in sync with the '__id' property.
-//This is necessary for actions like destroy which won't be called unless
-//an id is set
+//Our model couldn't be simpler.
 ModelEntity = Backbone.Model.extend({});
 
+//Our collection model is pretty damn simple too. We add this type 
+//So that we can group collections by Model class type (user, entry, etc)
 EntityCollection = Backbone.Collection.extend({type:null, model:ModelEntity});
 
 //This is the main widget of our application
 EntityWidget = Backbone.View.extend({
 	initialize:function(options){
+		//Create the scaffold of the widget (other bits and pieces are 
+		//plugged in in render())
 		this.el.innerHTML = $('#entity-body').html();
+		
+		//Renders the object initially 
+		this.render();
 
-		//Create a default entity to start
-		this.setModel(new ModelEntity());
-		//Set the typeahead so the user is aware of some of the options
+		//Set the typeahead so the user is aware of the options
 		//available to him
 		this.$('#new-value').typeahead({source: typeOptions});
 	},
+	//This is a convenience method for parents to set the model.
+	//We attach ourselves to this object so we listen to events.
 	setModel:function(newModel){
+		//detach from last model object
+		if (this.model)
+		{
+			this.model.off(null, null, this);	
+		}
+		
 		this.model = newModel;
 		//We listen to the change and destroy backbone events on
 		//the model
@@ -54,7 +64,7 @@ EntityWidget = Backbone.View.extend({
 		this.model.save();
 	}, 
 	//This fetches the object with the given '__id' property
-	//effectivly syncing our client-side model with what the server has
+	//effectively synchronizing our client-side model with what the server has
 	"click .retrieve":function(){
 		this.model.fetch();
 	},
@@ -83,7 +93,8 @@ EntityWidget = Backbone.View.extend({
 	//the user knows they are entering an appropriately formatted 
 	//property
 	check:function(currentText){
-		//TODO: Add a part that will allow for shortcutting reference objects
+		//Go through the keywords list. These elements are
+		//immediately converted into something different.
 		for (var anOption in typeOptions)
 		{
 			if (currentText == typeOptions[anOption])
@@ -105,10 +116,23 @@ EntityWidget = Backbone.View.extend({
 			this.$('#value-control').addClass("success");
 			this.$('#value-control').find('.help-inline').html('-> float');
 		}
+		//And our references to objects using the special syntax:
+		//<type>:<id>
 		else if(/^\w+:\d+$/.test(currentText))
 		{
 			this.$('#value-control').addClass("success");
 			this.$('#value-control').find('.help-inline').html('-> reference');
+		}
+		//This allows for dictionaries. Any nesting is not supported
+		else if(/^\{("\w+"\:[^,]+(,"\w+"\:[^,]+)*)?\}$/.test(currentText))
+		{
+			this.$('#value-control').addClass("success");
+			this.$('#value-control').find('.help-inline').html('-> dictionary');
+		}
+		else if(/^\[([^,\[\]]+(,[^,\[\]]+)*)?\]$/.test(currentText))
+		{
+			this.$('#value-control').addClass("success");
+			this.$('#value-control').find('.help-inline').html('-> array');			
 		}
 		else
 		{
@@ -135,6 +159,10 @@ EntityWidget = Backbone.View.extend({
 		{
 			result = new Date().toISOString();
 		}
+		else if(result=="file")
+		{
+			//TODO: Support files
+		}
 		else if(/^\d+$/.test(result))
 		{
 			result = parseInt(result, 10);		
@@ -145,10 +173,18 @@ EntityWidget = Backbone.View.extend({
 		}
 		else 
 		{
+			//Check and convert references to other objects
 			var match = /^(\w+):(\d+)$/.exec(result);
 			if(match)
 			{
 				result = {__type:match[1],__id:parseInt(match[2], 10),__ref:true};				
+			}
+			else
+			{
+				match = /(^\{.*\}$)|(^\[.*\]$)/.exec(result);
+				if (match){
+					result = JSON.parse(result);
+				}				
 			}
 		}
 
@@ -156,38 +192,75 @@ EntityWidget = Backbone.View.extend({
 	},
 	//Rendering takes a template and creates the guts of widget.
 	render: function(){
-		this.$('#prop-list').empty();
-		for (var property in this.model.attributes)
+		if (this.model)
 		{
-			var newRow = $(document.createElement('tr'));
-			var newName = $(document.createElement('td'));
-			newName.html(property);
-			newRow.append(newName);
-			var newVal = $(document.createElement('td'));
-			var propVal = this.model.attributes[property];
-			if (propVal instanceof Object)
+			this.$('#add-prop-button').removeClass('disabled');
+			
+			//Empty all current elements
+			this.$('#prop-list').empty();
+			//Go through all current properties and add a line for each.
+			for (var property in this.model.attributes)
 			{
-				newVal.html(JSON.stringify(propVal));
+				var newRow = $(document.createElement('tr'));
+				var newName = $(document.createElement('td'));
+				newName.html(property);
+				newRow.append(newName);
+				var newVal = $(document.createElement('td'));
+				var propVal = this.model.attributes[property];
+				if (propVal instanceof Object || propVal instanceof Array)
+				{
+					newVal.html(JSON.stringify(propVal));
+				}
+				else
+				{
+					newVal.html(propVal);
+				}
+				newRow.append(newVal);
+				this.$('#prop-list').append(newRow);
 			}
-			else
+			
+			//Get the bottom form which will change according to 
+			//whether or not this is an entity that exists in the database
+			var controlForm = this.$('#entity-control');
+			var saveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-primary save").html("Save");
+			controlForm.html(saveButton);
+			
+			if (this.model.id)
 			{
-				newVal.html(propVal);
+				var deleteButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-danger delete").html("Delete");
+				controlForm.append(deleteButton);
+				var retrieveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
+				controlForm.append(retrieveButton);
 			}
-			newRow.append(newVal);
-			this.$('#prop-list').append(newRow);
 		}
-		
-		var controlForm = this.$('#entity-control');
-		var saveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-primary save").html("Save");
-		controlForm.html(saveButton);
-		
-		if (this.model.id)
+		else
 		{
-			var deleteButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-danger delete").html("Delete");
-			controlForm.append(deleteButton);
-			var retrieveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
-			controlForm.append(retrieveButton);
+			this.$('#add-prop-button').addClass('disabled');
 		}
+	}
+});
+
+NewEntityWidget = Backbone.View.extend({
+	initialize:function(options){
+		this.render();
+	},
+	tagName:'div',
+	events:{
+		"keypress input":function(event){
+			if (event.which == 13)
+			{
+				this.addNew();
+			}
+		},
+		"click a":function(){
+			this.addNew();
+	}},
+	addNew: function(){
+		var newObj = new ModelEntity({__type:this.$("input").val()});
+		dispatcher.trigger(DO_APP_CONTENT_CHANGE_EVENT, newObj);
+	},
+	render: function(){
+		this.$el.html($('#new-entity-template').html());
 	}
 });
 
@@ -197,6 +270,7 @@ ExplorerWidget = Backbone.View.extend({
 		//Add the widget to the body.
 		$('#main-content').html(this.currentMainView.el);
 		
+		//Register to listen to the add content event.
 		dispatcher.on(DO_APP_CONTENT_CHANGE_EVENT,function(newModel){
 			this.addIfNotPresent(newModel);
 			this.render();
@@ -208,6 +282,9 @@ ExplorerWidget = Backbone.View.extend({
 		}, this);
 		this.render();
 	},
+	//Creates the default widget of the page and maintains a link to
+	//it. This is because we need a way to determine which model is 
+	//currently displayed
 	currentMainView: new EntityWidget(),
 	collections: {},
 	tagName:'div',
@@ -220,15 +297,36 @@ ExplorerWidget = Backbone.View.extend({
 	},
 	'click #search-button':function(){
 		this.performSearch();
+	},	//This is called every time a character is pressed on keyboard
+	"input #search-text":function(event){
+		this.verifySearch(event.target.value);		
 	}},
+	verifySearch:function(text){
+		//Give the user some feedback on whether they are following the
+		//correct protocol
+		if(/^(\w+(:\d+)?)?$/.test(text))
+		{
+			this.$('.form-search').addClass("success");
+		}
+		else
+		{
+			this.$('.form-search').removeClass("success");
+		}
+	},
+	//This is what is called when the search button is pressed
 	performSearch:function(){
+		//The current text in the search box
 		var searchBoxContents = this.$('#search-text').val();
+		
+		//If there is nothing, then we will search for all objects
 		if(searchBoxContents.length === 0)
 		{
+			//Call create collections to create the lists of different objects
 			$.ajax({url:"/api", success:_.bind(function(data, textStatus, jqXHR){
 				this.createCollections(data);
 			},this)});			
 		}
+		//If there is the name of a type, search for all of this type
 		if (/^\w+$/.test(searchBoxContents))
 		{
 			$.ajax({url:"/api/" + searchBoxContents, success:_.bind(function(data, textStatus, jqXHR){
@@ -237,6 +335,7 @@ ExplorerWidget = Backbone.View.extend({
 		}
 		else 
 		{
+			//Test if the user specified a class type and id.
 			var match = /^(\w+):(\d+)$/.exec(searchBoxContents);
 			if(match)
 			{
@@ -249,6 +348,8 @@ ExplorerWidget = Backbone.View.extend({
 	},
 	addIfNotPresent:function(model)
 	{
+		//This goes through existing groups and checks to see if
+		//the model that is added is already present in the list.
 		var objectType = model.attributes.__type;
 		existingCollection = this.collections[objectType];
 		if (existingCollection)
@@ -272,6 +373,18 @@ ExplorerWidget = Backbone.View.extend({
 	},
 	createCollections:function(data){
 		//Need to reset this every time we create the collections
+		//But we need to go through all of them to make sure that all
+		//listeners are removed from them.
+		for(var oldCollection in this.collections)
+		{
+			var aCollection = this.collections[oldCollection];
+			for (var i = 0; i<  aCollection.length; i++)
+			{
+				aCollection.at(i).off();
+			}
+			this.collections[oldCollection].off();
+		}
+		//Clear the existing collections
 		this.collections = {};
 		for (var item in data)
 		{
@@ -280,13 +393,20 @@ ExplorerWidget = Backbone.View.extend({
 			newEntity.id = obj.__id;
 			this.addIfNotPresent(newEntity);
 		}
+		//Render it now
 		this.render();
-		if (this.currentMainView)
+		if (this.currentMainView.model)
 		{
-			dispatcher.trigger(DID_APP_CONTENT_CHANGE_EVENT, this.currentMainView.model);
+			//Now that we have added a bunch of new ones, let's see
+			//if the list contains what we have already.
+			dispatcher.trigger(DO_APP_CONTENT_CHANGE_EVENT, this.currentMainView.model);
 		}		
 	},
+	//Keeps a list of all child widgets because we need to clear them
+	//out each time.
 	allEntityWidgets:[],
+	searchWidget:new NewEntityWidget(),
+	//Does house-cleaning so we don't have zombie objects
 	cleanupOldEntityWidgets:function(){
 		for (var item in this.allEntityWidgets)
 		{
@@ -314,23 +434,32 @@ ExplorerWidget = Backbone.View.extend({
 			this.$el.append(newList);
 		}
 		
-		//This is a confusing way to count the number of elements in 
-		//an object
+		//This is the only way to see how many keys exist for this
+		//object
 		if (Object.keys(this.collections).length === 0)
 		{
 			this.$el.append($('#alert-template').html());
 		}
 
-		this.$el.append(new NewEntityWidget().el);		
+		this.$el.append(this.searchWidget.el);		
 	}
 });
 
+//This is the small version of what you see in the main content
+//area. It shows the ID of the object and shows whether the main
+//content is displayed
 EntitySidebarWidget = Backbone.View.extend({
 	initialize:function(options){
 		this.model.on('change:__id',function(){
+			//Every time the __id changes, we need to update this
 			this.render();
 		}, this);
+		//This is required because this entity is created on the 'DO'
+		//event and then the DID is called for the object we are 
+		//currently selected
 		dispatcher.on(DID_APP_CONTENT_CHANGE_EVENT,function(newModel){
+			//This listens for an event that the selected item has changed
+			//and then updates based on that
 			if (_.isEqual(this.model.attributes,newModel.attributes))
 			{
 				this.$el.addClass("active");
@@ -345,6 +474,7 @@ EntitySidebarWidget = Backbone.View.extend({
 	},
 	tagName:'li',
 	cleanup:function(){
+		//Clean up our dependencies
 		dispatcher.off(null, null, this);
 		this.model.off(null, null, this);
 	},
@@ -354,35 +484,14 @@ EntitySidebarWidget = Backbone.View.extend({
 			}
 	},
 	render: function(){
+		//Create the guts
 		var inside = document.createElement('a');
 		inside.innerHTML = this.model.attributes.__id;
 		this.$el.html(inside);
 	}
 });
 
-NewEntityWidget = Backbone.View.extend({
-	initialize:function(options){
-		this.render();
-	},
-	tagName:'div',
-	events:{
-		"keypress input":function(event){
-			if (event.which == 13)
-			{
-				this.addNew();
-			}
-		},
-		"click a":function(){
-			this.addNew();
-	}},
-	addNew: function(){
-		var newObj = new ModelEntity({__type:this.$("input").val()});
-		dispatcher.trigger(DO_APP_CONTENT_CHANGE_EVENT, newObj);
-	},
-	render: function(){
-		this.$el.html($('#new-entity-template').html());
-	}
-});
+
 
 //The sync class is what backbone uses to sync to the server. It 
 //uses a weird method, so I'm doing all the $.ajax calls manually.

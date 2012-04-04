@@ -57,7 +57,7 @@ class Test(unittest.TestCase):
         self.assertDictEqual({'__id':dataKey.id(),'__type':'Data'}, dataResult, 'Sound Properties are present')
         
         locationResult = result['location']
-        self.assertDictEqual({'__type':'GeoPt','lat':-13.321,'lon':122.332}, locationResult, 'GeoPt is correct')
+        self.assertEqual('-13.321,122.332',locationResult);
         
     def testObjectWithLinks(self):
         userKey = model.User(devices=['device1','device2'], twitterHandle='me').put()

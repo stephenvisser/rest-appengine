@@ -126,9 +126,7 @@ class _ExtendedJSONEncoder(json.JSONEncoder):
         elif isinstance(obj, object):
             #Currently this is used for db.GeoPt properties. We just
             #convert properties directly into their dictionary representation
-            dictCopy = obj.__dict__.copy()
-            dictCopy[CLASS_TYPE_STR] = obj.__class__.__name__
-            return dictCopy
+            return str(obj)
         
         #If we haven't yet found an exact match, use the default
         return json.JSONEncoder.default(self, obj)
