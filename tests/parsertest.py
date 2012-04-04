@@ -19,6 +19,14 @@ class Test(unittest.TestCase):
         # Then activate the testbed, which prepares the service stubs for use.
         self.testbed.activate()
         self.testbed.init_datastore_v3_stub()
+        
+    def testNoPropertiesButKeys(self):
+        dictObj = json.dumps({'__id':3, '__type':'Entry'})
+    
+        obj = parser.put_model_obj(dictObj)
+        backAgain = db.get(obj.key())
+
+
 
     def testObjectWithKeys(self):
         
@@ -27,14 +35,14 @@ class Test(unittest.TestCase):
         
         entryKey = model.Entry(tags=['tag1', 'tag2', 'tag3'],
                             user = userKey,
-                            timestamp=1234556,
-                            location=model.GeoPt(lat=-13.321,lon=122.332),
+                            timestamp='2011-03-07',
+                            location=db.GeoPt(lat=-13.321,lon=122.332),
                             sound=dataKey,
                             description = 'This is an extended description of the entry').put()
         result = json.loads(parser.get_json_string(entryKey))
         self.assertDictContainsSubset( {'__type':'Entry',
                               '__id':entryKey.id(),
-                              'timestamp':1234556,
+                              'timestamp':'2011-03-07',
                               'description':'This is an extended description of the entry',
                               'tags':['tag1', 'tag2', 'tag3']},
                               result,
@@ -54,15 +62,15 @@ class Test(unittest.TestCase):
     def testObjectWithLinks(self):
         userKey = model.User(devices=['device1','device2'], twitterHandle='me').put()
         
+        userBack = db.get(userKey);
+
+        
         #CLIENT CODE
-        userDict = {'__type':'User','__id':userKey.id()}
-        geoDict = {'__type':'GeoPt',
-                   'lat':12.431,
-                   'lon':-22.321}
+        userDict = {'__type':'User','__id':userKey.id(), '__ref':True}
         dictObj = {'tags':['tag1', 'tag2', 'tag3'],
                   'user' : userDict,
-                  'timestamp':1234556,
-                  'location': geoDict,
+                  'timestamp':'2011-03-12',
+                  'location': '12.431,-22.321',
                   'sound':None,
                   'description': 'This is an extended description of the entry',
                   '__type':'Entry'}
@@ -73,10 +81,12 @@ class Test(unittest.TestCase):
         #SERVER
         obj = parser.put_model_obj(jsonResult)
         backAgain = db.get(obj.key())
+        userBack = db.get(userKey);
         
         self.assertEqual(set(['tag1', 'tag2', 'tag3']), set(backAgain.tags), 'Tags')
         self.assertEqual(userKey.id(), backAgain.user.key().id(), 'User')
-        self.assertEqual(1234556, backAgain.timestamp, 'Timestamp')
+        self.assertEqual('me', userBack.twitterHandle, 'User')
+        self.assertEqual('2011-03-12', backAgain.timestamp, 'Timestamp')
         self.assertEqual(12.431, backAgain.location.lat, 'Latitude')
         self.assertEqual(-22.321, backAgain.location.lon, 'Longitude')
         
@@ -84,13 +94,10 @@ class Test(unittest.TestCase):
         userDict = {'__type':'User',
                     'devices':['device1','device2'],
                     'twitterHandle':'me'}
-        geoDict = {'__type':'GeoPt',
-                   'lat':12.431,
-                   'lon':-22.321}
         dictObj = {'tags':['tag1', 'tag2', 'tag3'],
                   'user' : userDict,
-                  'timestamp':1234556,
-                  'location': geoDict,
+                  'timestamp':'2011-02-13',
+                  'location': '12.431,-22.321',
                   'sound':None,
                   'description': 'This is an extended description of the entry',
                   '__type':'Entry'}
@@ -103,28 +110,28 @@ class Test(unittest.TestCase):
         self.assertEqual('me',backAgain.user.twitterHandle, 'User/Twitter')
         
     def testSubset(self):
-        entryKey = model.Entry( timestamp=1).put()
+        entryKey = model.Entry( timestamp='2012-01-04').put()
         entryString = parser.get_json_string(entryKey)
         actualDict = json.loads(entryString)
-        self.assertDictEqual({'__type':'Entry', '__id':entryKey.id(), 'timestamp':1}, actualDict,'There shouldn\'t be nulls')
+        self.assertDictEqual({'__type':'Entry', '__id':entryKey.id(), 'timestamp':'2012-01-04'}, actualDict,'There shouldn\'t be nulls')
         
     def testOverwrite(self):
         userKey1 = model.User(devices=['device1','device2'], twitterHandle='me').put()
         userKey2 = model.User(devices=['device3','device4'], twitterHandle='you').put()
 
         entryKey = model.Entry(tags=['tag1', 'tag2', 'tag3'],
-                    timestamp=1,
-                    location=model.GeoPt(lat=-13.321,lon=122.332),
+                    timestamp='2012-01-04',
+                    location=db.GeoPt(lat=-13.321,lon=122.332),
                     user = userKey1,
                     description = 'This is an extended description of the entry').put()
                     
         backAgain = db.get(entryKey)
-        self.assertEqual(1, backAgain.timestamp, 'Timestamp = 1 to start')
+        self.assertEqual('2012-01-04', backAgain.timestamp, 'Timestamp = 1 to start')
         self.assertEqual(userKey1.id(), backAgain.user.key().id(), 'User num')
         self.assertAlmostEqual(-13.321,backAgain.location.lat,3)
         
         dictObj = {'tags':['tag1', 'tag2', 'tag3', 'tag4'],
-                  'timestamp':2,
+                  'timestamp':'2012-02-13',
                   'description': 'This is a NEW description',
                   'location':None,
                   'user':{'__type':'User','__id':userKey2.id()},
@@ -135,7 +142,7 @@ class Test(unittest.TestCase):
         obj = parser.put_model_obj(jsonResult)
         objKey = obj.key()
         backAgain = db.get(objKey)
-        self.assertEqual(2, backAgain.timestamp, 'Timestamp = 2 at end')
+        self.assertEqual('2012-02-13', backAgain.timestamp, 'Timestamp = 2 at end')
         self.assertEqual(userKey2.id(), backAgain.user.key().id(), 'User num')
         self.assertIsNone(backAgain.location,'Location has been zerod out')
         

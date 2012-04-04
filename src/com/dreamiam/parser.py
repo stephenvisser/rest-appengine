@@ -12,6 +12,7 @@ from com.dreamiam.model import * #@UnusedWildImport
 
 CLASS_TYPE_STR = '__type'
 ID_STR = '__id'
+REF_STR = '__ref'
 
 def dict_from_key(key):
     return  {CLASS_TYPE_STR:key.kind(),ID_STR:key.id()}
@@ -40,8 +41,12 @@ def put_model_obj(json_string):
             clsType = dct[CLASS_TYPE_STR]
             #Using get() here means we won't get a KeyError (just None)
             clsId = dct.get(ID_STR)
+            #We now support a more robust way of defining references in our
+            #code. Any JSON object that contains __reference=true will be
+            #evaluated as such.
+            clsReference = dct.get(REF_STR)
         
-            if clsId and len(dct) == 2:
+            if clsReference:
                 #If only the __type and __id properties exist
                 return Key.from_path(clsType, clsId)
 

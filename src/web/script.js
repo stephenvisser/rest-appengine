@@ -6,45 +6,11 @@ var latitude,longitude;
 //These are shortcuts that users can type to enter special things
 var typeOptions = ['null', 'true', 'false', 'here', 'now'];
 
-ModalNamer = Backbone.View.extend({
-	//This is the constructor of the view. From other tutorials, 
-	//it's common shorthand just to render the view.
-	initialize: function(){
-		this.render();
-	},
-	//These two attributes define the type of HTML element this
-	//view is
-	tagName: 'div',
-	className: 'modal fade',
-	//This defines what happens when this view is rendered.
-	render: function(){
-		//This takes a template from our HTML file and creates 
-		//The modal HTML from this markup
-		this.el.innerHTML = $('#modal-body-template').html();
-		var nameInput = this.$('input');
-		//In order to move the focus to the main input box when
-		//the modal is shown, we bind to the bootstrap event 'shown'
-		this.$el.on('shown', function (event) {
-			nameInput.focus();});
-	},
-	//These events represent any handling that the view needs
-	//The only event we're interested in is when the allDone button
-	//is pressed
-	events: {"click button": "allDone",
-		//We also provide the user with a shortcut to press the enter
-		//key as an alternate way to exit
-		"keypress input": function(event){
-			if (event.which == 13)
-			{
-				this.allDone();
-			}
-		}},
-		//Simply set the type of the current model entity and then hide
-		allDone: function(){
-			this.model.set("__type",this.$('input').val());
-			this.$el.modal('hide');
-		}
-});
+//This is a handy way of passing events inside the application
+var dispatcher = _.clone(Backbone.Events);
+
+var DO_APP_CONTENT_CHANGE_EVENT = 'app:set';
+var DID_APP_CONTENT_CHANGE_EVENT = 'app:change';
 
 //Our model couldn't be simpler. The only thing we need done is to keep
 //the intrinsic Model id property in sync with the '__id' property.
@@ -63,13 +29,21 @@ EntityCollection = Backbone.Collection.extend({type:null, model:ModelEntity});
 //This is the main widget of our application
 EntityWidget = Backbone.View.extend({
 	initialize:function(options){
-		this.render();
+		this.el.innerHTML = $('#entity-body').html();
+
+		//Create a default entity to start
+		this.setModel(new ModelEntity());
+		//Set the typeahead so the user is aware of some of the options
+		//available to him
+		this.$('#new-value').typeahead({source: typeOptions});
+	},
+	setModel:function(newModel){
+		this.model = newModel;
 		//We listen to the change and destroy backbone events on
 		//the model
 		this.model.on('change', function(){this.render();}, this);
-		this.model.on('destroy', function(){
-				//TODO: we need to do something when destroy succeeds
-			},this);
+		this.model.on('destroy', function(){/*TODO: Do something!*/},this);
+		this.render();
 	},
 	//This is a div HTML element at its core
 	tagName:'div',
@@ -116,6 +90,7 @@ EntityWidget = Backbone.View.extend({
 	//the user knows they are entering an appropriately formatted 
 	//property
 	check:function(currentText){
+		//TODO: Add a part that will allow for shortcutting reference objects
 		for (var anOption in typeOptions)
 		{
 			if (currentText == typeOptions[anOption])
@@ -174,54 +149,130 @@ EntityWidget = Backbone.View.extend({
 	},
 	//Rendering takes a template and creates the guts of widget.
 	render: function(){
-		this.el.innerHTML =_.template($('#entity-body').html(), {attributes:this.model.attributes});
-		//Set the typeahead so the user is aware of some of the options
-		//available to him
-		var something1 = this.$('#new-value').typeahead({source: typeOptions});
-		//Sets the focus to the key box every time the widget is rendered.
-		this.$('#new-key').focus();
+		this.$('#prop-list').empty();
+		for (var property in this.model.attributes)
+		{
+			var newRow = $(document.createElement('tr'));
+			var newName = $(document.createElement('td'));
+			newName.html(property);
+			newRow.append(newName);
+			var newVal = $(document.createElement('td'));
+			newVal.html(this.model.attributes[property]);
+			newRow.append(newVal);
+			this.$('#prop-list').append(newRow);
+		}
 	}
 });
 
 //This is the main widget of our application
 ExplorerWidget = Backbone.View.extend({
 	initialize:function(options){
+		//Add the widget to the body.
+		$('#main-content').html(this.currentMainView.el);
+		
+		dispatcher.on(DO_APP_CONTENT_CHANGE_EVENT,function(newModel){
+			this.addIfNotPresent(newModel);
+			this.render();
+			
+			//Create the widget that manages the model
+			this.currentMainView.setModel(newModel);
+			
+			dispatcher.trigger(DID_APP_CONTENT_CHANGE_EVENT, newModel);
+		}, this);
 		this.render();
 	},
+	currentMainView: new EntityWidget(),
 	collections: {},
 	tagName:'div',
 	className:'well',
 	events:{'click #search-button':function(){
-		var chosenURL = '/api';
 		var searchBoxContents = this.$('#search-text').val();
-		if (searchBoxContents.length > 0)
-			url = url + '/' + searchBoxContents;
-		$.ajax({url:chosenURL, success:_.bind(function(data, textStatus, jqXHR){
-			this.createCollections(data);
-		},this)});
+		if(searchBoxContents.length === 0)
+		{
+			$.ajax({url:"/api", success:_.bind(function(data, textStatus, jqXHR){
+				this.createCollections(data);
+			},this)});			
+		}
+		if (/^\w+$/.test(searchBoxContents))
+		{
+			$.ajax({url:"/api/" + searchBoxContents, success:_.bind(function(data, textStatus, jqXHR){
+				this.createCollections(data);
+			},this)});
+		}
+		else 
+		{
+			var match = /^(\w+):(\d+)$/.exec(searchBoxContents);
+			if(match)
+			{
+				$.ajax({url:"/api/" + match[1] + "/" + match[2], success:_.bind(function(data, textStatus, jqXHR){
+					this.createCollections([data]);
+					dispatcher.trigger(DO_APP_CONTENT_CHANGE_EVENT, this.collections[data.__type].at(0));
+				},this)});							
+			}
+		}
 	}},
+	addIfNotPresent:function(model)
+	{
+		var objectType = model.attributes.__type;
+		existingCollection = this.collections[objectType];
+		if (existingCollection)
+		{
+			for(var i = 0; i < existingCollection.length;i++)
+			{
+				var candidate = existingCollection.at(i);
+				if (_.isEqual(candidate.attributes,model.attributes))
+				{
+					return;
+				}
+			}
+		}
+		else
+		{
+			existingCollection = new EntityCollection();
+			existingCollection.type = objectType;
+			this.collections[objectType] = existingCollection; 
+		}
+		existingCollection.add(model);
+	},
 	createCollections:function(data){
+		//Need to reset this every time we create the collections
+		this.collections = {};
 		for (var item in data)
 		{
-			var objectType = (data[item]).__type;
-			existingCollection = this.collections[objectType];
-			if (!existingCollection)
-			{
-				existingCollection = new EntityCollection();
-				existingCollection.type = objectType;
-				this.collections[objectType] = existingCollection; 
-			}
-			existingCollection.add(data[item]);
+			this.addIfNotPresent(new ModelEntity(data[item]));
 		}
-		var someCollection = this.collections;
 		this.render();
+		if (this.currentMainView)
+		{
+			dispatcher.trigger(DID_APP_CONTENT_CHANGE_EVENT, this.currentMainView.model);
+		}		
+	},
+	allEntityWidgets:[],
+	cleanupOldEntityWidgets:function(){
+		for (var item in this.allEntityWidgets)
+		{
+			this.allEntityWidgets[item].cleanup();
+		}
 	},
 	//Rendering takes a template and creates the guts of widget.
 	render: function(){
 		this.$el.html($('#sidebar-template').html());
+		this.cleanupOldEntityWidgets();
+
 		for (var item in this.collections)
 		{
-			this.$el.append(new EntityListWidget({collection:this.collections[item]}).el);
+			var collection = this.collections[item];
+			var newList = $(document.createElement('ul')).addClass('nav nav-list');
+			var title = $(document.createElement('li')).addClass('nav-header');
+			title.html(collection.type);
+			newList.append(title);
+				
+			for (var i = 0; i < collection.length; i++){
+					var newWidget = new EntitySidebarWidget({model:collection.at(i)});
+					this.allEntityWidgets.push(newWidget);
+					newList.append(newWidget.el);
+			}
+			this.$el.append(newList);
 		}
 		
 		//This is a confusing way to count the number of elements in 
@@ -230,41 +281,67 @@ ExplorerWidget = Backbone.View.extend({
 		{
 			this.$el.append($('#alert-template').html());
 		}
+
+		this.$el.append(new NewEntityWidget().el);		
 	}
 });
 
 EntitySidebarWidget = Backbone.View.extend({
 	initialize:function(options){
+		this.model.on('change:__id',function(){
+			this.render();
+		}, this);
+		dispatcher.on(DID_APP_CONTENT_CHANGE_EVENT,function(newModel){
+			if (_.isEqual(this.model.attributes,newModel.attributes))
+			{
+				this.$el.addClass("active");
+			}
+			else
+			{
+				this.$el.removeClass("active");
+			}
+		}, this);
+
 		this.render();
 	},
 	tagName:'li',
+	cleanup:function(){
+		dispatcher.off(null, null, this);
+		this.model.off(null, null, this);
+	},
 	events:{
 		"click a":function(){
-			this.$el.addClass('active');
-		}
+			dispatcher.trigger(DO_APP_CONTENT_CHANGE_EVENT, this.model);
+			}
 	},
 	render: function(){
 		var inside = document.createElement('a');
 		inside.innerHTML = this.model.attributes.__id;
-		this.$el.append(inside);
+		this.$el.html(inside);
 	}
 });
 
-
-EntityListWidget = Backbone.View.extend({
+NewEntityWidget = Backbone.View.extend({
 	initialize:function(options){
 		this.render();
 	},
-	tagName:'ul',
-	className:'nav nav-list',
+	tagName:'div',
+	events:{
+		"keypress input":function(event){
+			if (event.which == 13)
+			{
+				this.addNew();
+			}
+		},
+		"click a":function(){
+			this.addNew();
+	}},
+	addNew: function(){
+		var newObj = new ModelEntity({__type:this.$("input").val()});
+		dispatcher.trigger(DO_APP_CONTENT_CHANGE_EVENT, newObj);
+	},
 	render: function(){
-		var thingy = document.createElement('li');
-		thingy.innerHTML = this.collection.type;
-		this.$el.append(thingy);
-		
-		for (var i = 0; i < this.collection.length; i++){
-			this.$el.append(new EntitySidebarWidget({model:this.collection.at(i)}).el);
-		}
+		this.$el.html($('#new-entity-template').html());
 	}
 });
 
@@ -278,7 +355,8 @@ Backbone.sync = function(method, model) {
 	if (method == "create" || method=="update")
 	{
 		//Creates the post request and then sets the id on success.
-		$.ajax({type:"POST",contentType:"application/json", data:JSON.stringify(model),url:'/api',success:function(data, textStatus, jqXHR){
+		var asJSON = JSON.stringify(model);
+		$.ajax({type:"POST",contentType:"application/json", data:asJSON,url:'/api',success:function(data, textStatus, jqXHR){
 			model.set("__id",parseInt(data, 10));
 		}});
 	}
@@ -291,6 +369,8 @@ Backbone.sync = function(method, model) {
 	{
 		//Creates the get request and populates all fields upon success
 		$.ajax({url:'/api/'+model.get('__type')+'/'+model.get('__id'), success:function(data, textStatus, jqXHR){
+			//This will make sure that properties are also un-set as appropriate
+			model.clear({silent: true});
 			model.set(data);
 			}
 		});
@@ -307,20 +387,8 @@ $(function(){
 	});
 	
 	//Create the sidebar
-	var sidebar = new ExplorerWidget();
+	var parentView = new ExplorerWidget();
 	
 	//Add the widget to the body.
-	$('#side-content').append(sidebar.el);	
-	
-	//Create the current model which doesn't have anything yet.
-	var currentModel = new ModelEntity();
-
-	//Create the widget that manages the model
-	var newWidget = new EntityWidget({model:currentModel});
-	
-	//Add the widget to the body.
-	$('#main-content').append(newWidget.el);
-
-	//Create the modal immediately
-	new ModalNamer({model:currentModel}).$el.modal('show');
+	$('#side-content').append(parentView.el);		
 });

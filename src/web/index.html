@@ -9,12 +9,25 @@
 <td><%=key%></td><td> :</td> <td><%=value%></td><td> <button class="doSomething btn-small">Delete</button></td>
 </script>
 
+<style type="text/css">
+body {padding-top:20px;}
+</style>
 <script type="text/template" id="sidebar-template">
 <form class="form-search">
   <input type="text" class="input-medium search-query" id="search-text">
   <a class="btn" id="search-button"><i class="icon-search"></i></a>
 </form>
 </script>
+
+<script type="text/template" id="new-entity-template">
+<br>
+<h4>Create New</h4>
+<form class="form-inline">
+<input type="text">
+<a class="btn btn-mini" id="add-new-button"><i class="icon-plus"></i></a>
+</form>
+</script>
+
 
 <script type="text/template" id="alert-template">
 <div class="alert">
@@ -26,13 +39,8 @@
 <!-- TODO: We should format objects here -->
 <script type="text/template" id="entity-body">
     <h3>Existing Properties</h3>
-    <table class="table table-striped">
+    <table class="table table-striped" id="prop-list">
     <tr><th>Property Name</th><th>Property Value</th></tr>
-    <% for (property in attributes){%>
-    <tr>
-    <td><%print(property)%></td><td><%print(attributes[property])%></td>
-    </tr>
-    <% } %>
     </table>
     <form class="well form-horizontal">
         <h3>New Property:</h3>
