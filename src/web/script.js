@@ -4,8 +4,7 @@
 var latitude,longitude;
 
 //These are shortcuts that users can type to enter special things
-var typeOptions = ['null', 'true', 'false', 'here', 'now'],
-
+var typeOptions = ['null', 'true', 'false', 'here', 'now'];
 
 ModalNamer = Backbone.View.extend({
 	//This is the constructor of the view. From other tutorials, 
@@ -58,6 +57,8 @@ ModelEntity = Backbone.Model.extend({
 		});
 	}
 });
+
+EntityCollection = Backbone.Collection.extend({type:null, model:ModelEntity});
 
 //This is the main widget of our application
 EntityWidget = Backbone.View.extend({
@@ -182,6 +183,91 @@ EntityWidget = Backbone.View.extend({
 	}
 });
 
+//This is the main widget of our application
+ExplorerWidget = Backbone.View.extend({
+	initialize:function(options){
+		this.render();
+	},
+	collections: {},
+	tagName:'div',
+	className:'well',
+	events:{'click #search-button':function(){
+		var chosenURL = '/api';
+		var searchBoxContents = this.$('#search-text').val();
+		if (searchBoxContents.length > 0)
+			url = url + '/' + searchBoxContents;
+		$.ajax({url:chosenURL, success:_.bind(function(data, textStatus, jqXHR){
+			this.createCollections(data);
+		},this)});
+	}},
+	createCollections:function(data){
+		for (var item in data)
+		{
+			var objectType = (data[item]).__type;
+			existingCollection = this.collections[objectType];
+			if (!existingCollection)
+			{
+				existingCollection = new EntityCollection();
+				existingCollection.type = objectType;
+				this.collections[objectType] = existingCollection; 
+			}
+			existingCollection.add(data[item]);
+		}
+		var someCollection = this.collections;
+		this.render();
+	},
+	//Rendering takes a template and creates the guts of widget.
+	render: function(){
+		this.$el.html($('#sidebar-template').html());
+		for (var item in this.collections)
+		{
+			this.$el.append(new EntityListWidget({collection:this.collections[item]}).el);
+		}
+		
+		//This is a confusing way to count the number of elements in 
+		//an object
+		if (Object.keys(this.collections).length === 0)
+		{
+			this.$el.append($('#alert-template').html());
+		}
+	}
+});
+
+EntitySidebarWidget = Backbone.View.extend({
+	initialize:function(options){
+		this.render();
+	},
+	tagName:'li',
+	events:{
+		"click a":function(){
+			this.$el.addClass('active');
+		}
+	},
+	render: function(){
+		var inside = document.createElement('a');
+		inside.innerHTML = this.model.attributes.__id;
+		this.$el.append(inside);
+	}
+});
+
+
+EntityListWidget = Backbone.View.extend({
+	initialize:function(options){
+		this.render();
+	},
+	tagName:'ul',
+	className:'nav nav-list',
+	render: function(){
+		var thingy = document.createElement('li');
+		thingy.innerHTML = this.collection.type;
+		this.$el.append(thingy);
+		
+		for (var i = 0; i < this.collection.length; i++){
+			this.$el.append(new EntitySidebarWidget({model:this.collection.at(i)}).el);
+		}
+	}
+});
+
 //The sync class is what backbone uses to sync to the server. It 
 //uses a weird method, so I'm doing all the $.ajax calls manually.
 Backbone.sync = function(method, model) {
@@ -209,7 +295,6 @@ Backbone.sync = function(method, model) {
 			}
 		});
 	}
-
 };
 
 //JQuery to english: 'When the page is done loading, perform this function'
@@ -221,6 +306,12 @@ $(function(){
 		longitude = position.coords.longitude;
 	});
 	
+	//Create the sidebar
+	var sidebar = new ExplorerWidget();
+	
+	//Add the widget to the body.
+	$('#side-content').append(sidebar.el);	
+	
 	//Create the current model which doesn't have anything yet.
 	var currentModel = new ModelEntity();
 
@@ -228,7 +319,7 @@ $(function(){
 	var newWidget = new EntityWidget({model:currentModel});
 	
 	//Add the widget to the body.
-	$('body').append(newWidget.el);
+	$('#main-content').append(newWidget.el);
 
 	//Create the modal immediately
 	new ModalNamer({model:currentModel}).$el.modal('show');

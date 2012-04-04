@@ -4,15 +4,23 @@
 <meta charset="UTF-8">
 
 <link href="http://twitter.github.com/bootstrap/assets/css/bootstrap.css" rel="stylesheet">
-    <style type="text/css">
-      body {
-        padding: 40px;
-      }
-
-    </style>
 
 <script type="text/template" id="list-element">
 <td><%=key%></td><td> :</td> <td><%=value%></td><td> <button class="doSomething btn-small">Delete</button></td>
+</script>
+
+<script type="text/template" id="sidebar-template">
+<form class="form-search">
+  <input type="text" class="input-medium search-query" id="search-text">
+  <a class="btn" id="search-button"><i class="icon-search"></i></a>
+</form>
+</script>
+
+<script type="text/template" id="alert-template">
+<div class="alert">
+  <a class="close" data-dismiss="alert">×</a>
+  Press search to kick this off.
+</div>
 </script>
 
 <!-- TODO: We should format objects here -->
@@ -53,8 +61,16 @@
 
 </head>
 <body>
-
-
+<div class="container-fluid">
+  <div class="row-fluid">
+    <div class="span4" id="side-content">
+      <!--Sidebar content-->
+    </div>
+    <div class="span8" id="main-content">
+      <!--Body content-->
+    </div>
+  </div>
+</div>
 </body>
 
 <script src="http://code.jquery.com/jquery-1.7.2.min.js" type="text/javascript"></script>
@@ -63,5 +79,6 @@
 <script src="web/bootstrap/js/bootstrap-transition.js" type="text/javascript"></script>
 <script src="web/bootstrap/js/bootstrap-typeahead.js" type="text/javascript"></script>
 <script src="web/bootstrap/js/bootstrap-modal.js" type="text/javascript"></script>
+<script src="web/bootstrap/js/bootstrap-alert.js" type="text/javascript"></script>
 <script src="web/script.js" type="text/javascript"></script>
 </html>
