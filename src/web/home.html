@@ -7,64 +7,37 @@
     <style type="text/css">
       body {
         padding: 40px;
-        background:#003;
+        background:#89c;
         color:#fff;
       }
       table, form{
       	color:#444;
       }
+      #container{
+      	width:800px;
+      	margin:0 auto;
+      }
 
     </style>
 
-<script type="text/template" id="list-element">
-<td><%=key%></td><td> :</td> <td><%=value%></td><td> <button class="doSomething btn-small">Delete</button></td>
-</script>
-
 <!-- TODO: We should format objects here -->
 <script type="text/template" id="entity-body">
-    <h3>Existing Properties</h3>
-    <table class="table table-striped">
-    <tr><th>Property Name</th><th>Property Value</th></tr>
-    <% for (property in attributes){%>
-    <tr>
-    <td><%print(property)%></td><td><%print(attributes[property])%></td>
-    </tr>
-    <% } %>
-    </table>
-    <form class="well form-horizontal">
-        <h3>New Property:</h3>
-        <div class="control-group" id="key-control">
-			<label class="control-label" for="new-key">Key:</label>
-			<div class="controls">
-				<input placeholder="Property Name" id="new-key"><span class="help-inline"></span>
-			</div>
-		</div>
-        <div class="control-group" id="value-control">
-			<label class="control-label" for="new-value">Value:</label>
-			<div class="controls">
-				<input placeholder="Value" id="new-value" data-provide="typeahead"><span class="help-inline"></span>
-			</div>
-		</div>
-        <button type="button" class="btn add-property">Add</button>
-    </form>
-    
-
-    <button type="button" class="btn btn-primary save">Save</button> <button type="button" class="btn btn-danger delete">Delete</button> <button type="button" class="btn btn-warning retrieve">Retrieve</button>
+	<div id="container">
+		<h3>Your Dreams</h3>
+		<table class="table table-striped">
+			<tr>
+				<th>Property Name</th><th>Property Value</th>
+			</tr>
+			<% for (property in attributes){%>
+			<tr>
+				<td><%print(property)%></td><td><%print(attributes[property])%></td>
+			</tr>
+			<% } %>
+    	</table>
+	</div>
 </script>
 
-<script type="text/html" id="modal-body-template">
-  <!--<div class="modal-header">
-    <h3>Enter name</h3>
-  </div>
-  <div class="modal-body">
-    <input type="text">
-  </div>
-  <div class="modal-footer">
-    <button type="button" class="btn btn-primary">OK</button>
-  </div>-->
-</script>
-
-<title>Manage Dreamiam</title>
+<title>Dreamiam Home</title>
 
 </head>
 <body>
