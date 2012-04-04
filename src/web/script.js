@@ -16,13 +16,7 @@ var DID_APP_CONTENT_CHANGE_EVENT = 'app:change';
 //the intrinsic Model id property in sync with the '__id' property.
 //This is necessary for actions like destroy which won't be called unless
 //an id is set
-ModelEntity = Backbone.Model.extend({
-	initialize:function(options){
-		this.on('change:__id',function(){
-			this.id = this.get('__id');   
-		});
-	}
-});
+ModelEntity = Backbone.Model.extend({});
 
 EntityCollection = Backbone.Collection.extend({type:null, model:ModelEntity});
 
@@ -75,7 +69,6 @@ EntityWidget = Backbone.View.extend({
 		if (event.which == 13)
 		{
 			this.add();
-			return false;
 		}
 	},
 	//This is called when the autocomplete box is pressed
@@ -106,18 +99,23 @@ EntityWidget = Backbone.View.extend({
 		{
 			this.$('#value-control').addClass("success");
 			this.$('#value-control').find('.help-inline').html('-> int');
-			return;
 		}
 		else if(/^\d*\.\d+$/.test(currentText))
 		{
 			this.$('#value-control').addClass("success");
 			this.$('#value-control').find('.help-inline').html('-> float');
-			return;
 		}
-		
-		//If there is no match, remove formatting
-		this.$('#value-control').removeClass("success");
-		this.$('#value-control').find('.help-inline').html('');
+		else if(/^\w+:\d+$/.test(currentText))
+		{
+			this.$('#value-control').addClass("success");
+			this.$('#value-control').find('.help-inline').html('-> reference');
+		}
+		else
+		{
+			//If there is no match, remove formatting
+			this.$('#value-control').removeClass("success");
+			this.$('#value-control').find('.help-inline').html('');	
+		}		
 	},
 	add:function()
 	{
@@ -145,6 +143,15 @@ EntityWidget = Backbone.View.extend({
 		{
 			result = parseFloat(result);      
 		}
+		else 
+		{
+			var match = /^(\w+):(\d+)$/.exec(result);
+			if(match)
+			{
+				result = {__type:match[1],__id:parseInt(match[2], 10),__ref:true};				
+			}
+		}
+
 		this.model.set(this.$('#new-key').val(), result);
 	},
 	//Rendering takes a template and creates the guts of widget.
@@ -157,9 +164,29 @@ EntityWidget = Backbone.View.extend({
 			newName.html(property);
 			newRow.append(newName);
 			var newVal = $(document.createElement('td'));
-			newVal.html(this.model.attributes[property]);
+			var propVal = this.model.attributes[property];
+			if (propVal instanceof Object)
+			{
+				newVal.html(JSON.stringify(propVal));
+			}
+			else
+			{
+				newVal.html(propVal);
+			}
 			newRow.append(newVal);
 			this.$('#prop-list').append(newRow);
+		}
+		
+		var controlForm = this.$('#entity-control');
+		var saveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-primary save").html("Save");
+		controlForm.html(saveButton);
+		
+		if (this.model.id)
+		{
+			var deleteButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-danger delete").html("Delete");
+			controlForm.append(deleteButton);
+			var retrieveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
+			controlForm.append(retrieveButton);
 		}
 	}
 });
@@ -185,7 +212,16 @@ ExplorerWidget = Backbone.View.extend({
 	collections: {},
 	tagName:'div',
 	className:'well',
-	events:{'click #search-button':function(){
+	events:{"keypress #search-text":function(event){
+		if (event.which == 13)
+		{
+			this.performSearch();
+		}
+	},
+	'click #search-button':function(){
+		this.performSearch();
+	}},
+	performSearch:function(){
 		var searchBoxContents = this.$('#search-text').val();
 		if(searchBoxContents.length === 0)
 		{
@@ -210,7 +246,7 @@ ExplorerWidget = Backbone.View.extend({
 				},this)});							
 			}
 		}
-	}},
+	},
 	addIfNotPresent:function(model)
 	{
 		var objectType = model.attributes.__type;
@@ -239,7 +275,10 @@ ExplorerWidget = Backbone.View.extend({
 		this.collections = {};
 		for (var item in data)
 		{
-			this.addIfNotPresent(new ModelEntity(data[item]));
+			var obj = data[item];
+			var newEntity = new ModelEntity(obj);
+			newEntity.id = obj.__id;
+			this.addIfNotPresent(newEntity);
 		}
 		this.render();
 		if (this.currentMainView)
@@ -357,7 +396,8 @@ Backbone.sync = function(method, model) {
 		//Creates the post request and then sets the id on success.
 		var asJSON = JSON.stringify(model);
 		$.ajax({type:"POST",contentType:"application/json", data:asJSON,url:'/api',success:function(data, textStatus, jqXHR){
-			model.set("__id",parseInt(data, 10));
+			model.id = parseInt(data, 10);
+			model.set("__id",model.id);
 		}});
 	}
 	else if (method=="delete")
@@ -372,6 +412,7 @@ Backbone.sync = function(method, model) {
 			//This will make sure that properties are also un-set as appropriate
 			model.clear({silent: true});
 			model.set(data);
+			model.id = data.__id;
 			}
 		});
 	}

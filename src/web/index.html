@@ -13,26 +13,32 @@
 body {padding-top:20px;}
 </style>
 <script type="text/template" id="sidebar-template">
-<form class="form-search">
+<div class="form-search">
   <input type="text" class="input-medium search-query" id="search-text">
   <a class="btn" id="search-button"><i class="icon-search"></i></a>
-</form>
+</div>
+<br>
 </script>
 
 <script type="text/template" id="new-entity-template">
 <br>
 <h4>Create New</h4>
-<form class="form-inline">
+<div class="form-inline">
 <input type="text">
 <a class="btn btn-mini" id="add-new-button"><i class="icon-plus"></i></a>
-</form>
+</div>
 </script>
 
 
 <script type="text/template" id="alert-template">
 <div class="alert">
   <a class="close" data-dismiss="alert">×</a>
-  Press search to kick this off.
+  <strong>No Results:</strong> Use one of the following:
+  <ul>
+    <li>: all</li>
+    <li><strong>&lt;type&gt;</strong>: all of type</li>
+    <li><strong>&lt;type&gt;:&lt;id&gt;</strong>: all of type with id</li>
+  </ul>
 </div>
 </script>
 
@@ -42,15 +48,15 @@ body {padding-top:20px;}
     <table class="table table-striped" id="prop-list">
     <tr><th>Property Name</th><th>Property Value</th></tr>
     </table>
-    <form class="well form-horizontal">
+    <div class="well form-horizontal">
         <h3>New Property:</h3>
         <div class="control-group" id="key-control"><label class="control-label" for="new-key">Key:</label><div class="controls"><input placeholder="Property Name" id="new-key"><span class="help-inline"></span> </div></div>
         <div class="control-group" id="value-control"><label class="control-label" for="new-value">Value:</label><div class="controls"><input placeholder="Value" id="new-value" data-provide="typeahead"><span class="help-inline"></span></div></div>
         <button type="button" class="btn add-property">Add</button>
-    </form>
-    
+    </div>
+    <div id="entity-control">
+    </div> 
 
-    <button type="button" class="btn btn-primary save">Save</button> <button type="button" class="btn btn-danger delete">Delete</button> <button type="button" class="btn btn-warning retrieve">Retrieve</button>
 </script>
 
 <script type="text/html" id="modal-body-template">
