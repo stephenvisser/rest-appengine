@@ -19,10 +19,10 @@ def dict_from_key(key):
 
 def put_model_obj(json_string):
     '''
-    Converts a string to the requesite Model object. Returns the object that
+    Converts a string to the requisite Model object. Returns the object that
     was created from the string. NOTE that the objects (they may be nested) are
     all stored implicitly and there is no way to turn this off for now. The
-    reason for this behaviour is to make parsing these objects faster.
+    reason for this behavior is to make parsing these objects faster.
     '''
     list_of_objects = []
     def _hook_to_object(dct):

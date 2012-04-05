@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<link href="http://twitter.github.com/bootstrap/assets/css/bootstrap.css" rel="stylesheet">
+    <style type="text/css">
+      body {
+        padding: 40px;
+        background:#89c;
+        color:#fff;
+      }
+      table, form{
+      	color:#444;
+      }
+      #container{
+      	width:800px;
+      	margin:0 auto;
+      }
+
+    </style>
+
+<!-- TODO: We should format objects here -->
+<script type="text/template" id="entity-body">
+	<div id="container">
+		<h3>Your Dreams</h3>
+		<table class="table table-striped">
+			<tr>
+				<th>Property Name</th><th>Property Value</th>
+			</tr>
+			<% for (property in attributes){%>
+			<tr>
+				<td><%print(property)%></td><td><%print(attributes[property])%></td>
+			</tr>
+			<% } %>
+    	</table>
+	</div>
+</script>
+
+<title>Dreamiam Home</title>
+
+</head>
+<body>
+
+
+</body>
+
+<script src="http://code.jquery.com/jquery-1.7.2.min.js" type="text/javascript"></script>
+<script src="web/underscore-min.js" type="text/javascript"></script>
+<script src="web/backbone-min.js" type="text/javascript"></script>
+<script src="web/bootstrap/js/bootstrap-transition.js" type="text/javascript"></script>
+<script src="web/bootstrap/js/bootstrap-typeahead.js" type="text/javascript"></script>
+<script src="web/bootstrap/js/bootstrap-modal.js" type="text/javascript"></script>
+<script src="web/home-script.js" type="text/javascript"></script>
+</html>
