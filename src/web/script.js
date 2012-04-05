@@ -11,36 +11,12 @@ var dispatcher = _.clone(Backbone.Events);
 
 var DO_APP_CONTENT_CHANGE_EVENT = 'app:set';
 var DID_APP_CONTENT_CHANGE_EVENT = 'app:change';
-var ADD_PROPERTY_EVENT = 'entity:addProp';
-
-var sendtoserver=function(data, contentType){
-	try{
-		var xml = new XMLHttpRequest();
-
-		xml.open('POST','/api',true);
-
-		xml.setRequestHeader("content-type",contentType);
-		xml.onreadystatechange=function(){
-			try{
-				if(xml.readyState==4){
-				}
-			}
-			catch(e){}
-		};
-
-		xml.send(data);
-	}
-	catch(e){
-			}
-};
-
-
 
 //Our model couldn't be simpler.
 ModelEntity = Backbone.Model.extend({});
 
-//Our collection model is pretty damn simple too. We add this type 
-//So that we can group collections by Model class type (user, entry, etc)
+//Our collection model is pretty damn simple too. We add the 'type' property 
+//so that we can group collections by Model class type (user, entry, etc)
 EntityCollection = Backbone.Collection.extend({type:null, model:ModelEntity});
 
 //This is the main widget of our application
@@ -341,54 +317,22 @@ ExplorerWidget = Backbone.View.extend({
 	},
 	'click #search-button':function(){
 		this.performSearch();
-	},	//This is called every time a character is pressed on keyboard
-	"input #search-text":function(event){
-		this.verifySearch(event.target.value);		
 	}},
-	verifySearch:function(text){
-		//Give the user some feedback on whether they are following the
-		//correct protocol
-		if(/^(\w+(:\d+)?)?$/.test(text))
-		{
-			this.$('.form-search').addClass("success");
-		}
-		else
-		{
-			this.$('.form-search').removeClass("success");
-		}
-	},
 	//This is what is called when the search button is pressed
 	performSearch:function(){
 		//The current text in the search box
 		var searchBoxContents = this.$('#search-text').val();
 		
+		var targetURL = '/api';
 		//If there is nothing, then we will search for all objects
-		if(searchBoxContents.length === 0)
+		if(searchBoxContents.length > 0)
 		{
-			//Call create collections to create the lists of different objects
-			$.ajax({url:"/api", success:_.bind(function(data, textStatus, jqXHR){
-				this.createCollections(data);
-			},this)});			
+			targetURL += '/' + searchBoxContents;
 		}
-		//If there is the name of a type, search for all of this type
-		if (/^\w+$/.test(searchBoxContents))
-		{
-			$.ajax({url:"/api/" + searchBoxContents, success:_.bind(function(data, textStatus, jqXHR){
-				this.createCollections(data);
-			},this)});
-		}
-		else 
-		{
-			//Test if the user specified a class type and id.
-			var match = /^(\w+):(\d+)$/.exec(searchBoxContents);
-			if(match)
-			{
-				$.ajax({url:"/api/" + match[1] + "/" + match[2], success:_.bind(function(data, textStatus, jqXHR){
-					this.createCollections([data]);
-					dispatcher.trigger(DO_APP_CONTENT_CHANGE_EVENT, this.collections[data.__type].at(0));
-				},this)});							
-			}
-		}
+		//Call create collections to create the lists of different objects
+		$.ajax({url:targetURL, success:_.bind(function(data, textStatus, jqXHR){
+			this.createCollections(data);
+		},this)});			
 	},
 	addIfNotPresent:function(model)
 	{
@@ -585,10 +529,8 @@ FilePicker = Backbone.View.extend({
 			alert(this.$('#response').html());
 		},this);
 		this.$('#file-upload-form').ajaxForm({ 
-			target:'#response',
-			success:_.bind(function(xhr){
-				var something = this.$('#response').val();
-				this.model.set(this.propName,{__type:'Data',__id:parseInt(this.$('#response').val(), 10),__ref:true,__contentType:'audio/mpeg'});
+			success:_.bind(function(responseText, statusText, xhr, $form){
+				this.model.set(this.propName,{__type:'Data',__id:parseInt(responseText, 10),__ref:true,__contentType:'audio/mpeg'});
 				this.$el.modal('hide');
 			},this)});
 	},

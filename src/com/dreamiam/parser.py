@@ -90,16 +90,12 @@ def put_model_obj(json_string):
     #Return the last object in the list. This will be the root
     return list_of_objects[-1]
 
-def get_json_string(model_object_key):
+def get_json_string(objects):
     '''
     Uses a Model object KEY to retrieve the actual object and then return
     its string value.
     '''
-    result = db.get(model_object_key)
-    if result:
-        return json.dumps(result, cls=_ExtendedJSONEncoder)
-    else:
-        raise Exception('Entity of type %s with id %d does not exist'%(model_object_key.kind(),model_object_key.id()))
+    return json.dumps(objects, cls=_ExtendedJSONEncoder)
 
 class _ExtendedJSONEncoder(json.JSONEncoder):
     '''Custom Encoder that can handle Model objects'''

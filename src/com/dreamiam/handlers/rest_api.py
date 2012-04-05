@@ -70,61 +70,84 @@ class Rest(webapp2.RequestHandler):
             raise MalformedURLException("We can't handle a filter on property \
                 '%s' in class '%s' of type: '%s'" % (property_name, model_cls, attrType))
         return queryValue
+    
+    def _get_filters(self):
+        filters = self.request.get_all('filter')        
+        #Clever way to create a dictionary of propNames to values
+        return dict(item.split(':') for item in filters)        
 
+    def _create_if_necessary(self, cls, currentEntity, values):
+        if not currentEntity and self.request.get('non_exist') == 'create':
+            #If the policy is to create an object if it doesn't already exist,
+            #we should do that here
+            brandNewObj = cls(**values)
+            bnoKey = brandNewObj.put()
+            if self.request.get('load') != 'all':
+                currentEntity = [bnoKey]
+            else:
+                currentEntity = [brandNewObj]
+        return currentEntity;
 
-    def _perform_filter(self, cls, propertyFilter):
+    def _perform_filter_on_key(self, key):
         '''Performs a search for all items in a filter'''
-        allItems = []
-        filter_result = re.match(r'(?P<property_name>/w+):(?P<filter_value>/w+)', propertyFilter)
-        if not filter_result:
-            raise MalformedURLException("The filter is malformed: '%s'" % propertyFilter)
+                
+        #Create the class from the key
+        cls = globals()[key.kind()]
+
+        #Clever way to create a dictionary of propNames to values
+        result = self._get_filters()
         
+        #This is what we use to determine if it matches any possible
+        #filters the user may have set
+        resultArray = []
+        #Start by retrieving the object
+        entireObj = db.get(key)
+        #Change to an array if this object doesn't exist
+        if entireObj:
+            #Optimistically putting the obj as a result
+            resultArray.append(entireObj)
+            for prop_name,filter_value in result.iteritems():
+                converted_filter_value = self._convert_filter_to_type(cls, prop_name,filter_value)
+                if getattr(entireObj,prop_name) != converted_filter_value:
+                    #Failed to match a filter so remove it as a match
+                    del resultArray[0]
+                    break
+
+        #Need to make sure the ID is set on any future objects
+        result['key'] = key
+
+        return self._create_if_necessary(cls, resultArray, result);
+
+    def _perform_filter(self, cls):
+        '''Performs a search for all items in a filter'''
+                
         #=======================================================================
         # Create local variables for all the request variables
         #=======================================================================
-        load_content = self.request.get('load_content')
-        existPolicy = self.request.get('non_exist')
-        prop_name = filter_result.group('property_name')
-        filter_value = filter_result.group('filter_value')
+        isLoadKeysOnly = self.request.get('load') != 'all'
+        fetch,offset = self.request.get('fetch','20,0').split(',')
         
-        
-        converted_filter_value = self._convert_filter_to_type(cls, prop_name,filter_value)
-        #Iterate through the responses
-        for item in cls.gql('WHERE %s = :1' % prop_name, converted_filter_value):
-            if load_content == 'all':
-                allItems.append(item)
-            else:
-                allItems.append(item.key())
+        query = db.Query(cls,keys_only=isLoadKeysOnly)
+
+        result = self._get_filters();
+
+        for prop_name,filter_value in result.iteritems():
+            converted_filter_value = self._convert_filter_to_type(cls, prop_name,filter_value)
+            query.filter(prop_name, converted_filter_value)
+
+        #Iterate through the responses. Implicitly fetches the results
+        allItems = query.fetch(int(fetch),int(offset));
         
         #If the policy is to create an object if it doesn't already exist,
         #we should do that here
-        if len(allItems) == 0 and existPolicy == 'create':
-            brandNewObj = cls(**{prop_name:filter_value})
-            bnoKey = brandNewObj.put()
-            if load_content == 'none':
-                allItems.append(bnoKey)
-            else:
-                allItems.append(brandNewObj)
-        return allItems
+        return self._create_if_necessary(cls, allItems, result)
 
     def _write_all_objects_of_type(self, model_type):
         '''This finds all objects of a given type and writes them as a response'''
         cls = globals()[model_type]
 
-        propertyFilter = self.request.get('filter')
-        if propertyFilter:
-            #Finds all items that match the filter
-            allItems = self._perform_filter(cls, propertyFilter)
-
-        else:    
-            #Finds the class that was specified from our list of global objects
-            #and create a Query for all of these objects. Then iterate through
-            #and collect the IDs
-            keysOnlyBool = self.request.get('load_content') != 'all'
-            allItems = []
-            for item in cls.all(keys_only=keysOnlyBool):
-                allItems.append(item)
-
+        allItems = self._perform_filter(cls)
+        
         #Write JSON back to the client
         self.response.headers['Content-Type'] = "application/json"
         self.response.write(parser.get_json_string(allItems))
@@ -142,20 +165,28 @@ class Rest(webapp2.RequestHandler):
             self.response.headers['Content-Type'] = str(data.contentType)
             self.response.write(data.data)
         else:
+            #Create the key
             obj_key = db.Key.from_path(model_type, model_id)
-            objectString = parser.get_json_string(obj_key)
+            
+            #Do some weird voodoo magic to do the bidding of
+            #various optional parameters
+            obj_result = self._perform_filter_on_key(obj_key)
+
+            #We need to make these objects return arrays too
+            objectString = parser.get_json_string(obj_result)
+                
             #Return the values in the entity dictionary
             self.response.headers['Content-Type'] = "application/json"
             self.response.write(objectString)
             
     def _write_all(self):
         '''Writes every single entity stored in the DB'''
+        isLoadKeysOnly = self.request.get('load') != 'all'
 
         allEntities = []
         for k in metadata.Kind.all():
             if not k.kind_name.startswith('_'):
-                for o in globals()[k.kind_name].all(keys_only=True):
-                    allEntities.append(o)
+                allEntities.extend(globals()[k.kind_name].all(keys_only=isLoadKeysOnly))
         self.response.headers['Content-Type'] = "application/json"
         self.response.write(parser.get_json_string(allEntities))
     
