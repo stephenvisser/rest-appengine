@@ -107,12 +107,12 @@ class _ExtendedJSONEncoder(json.JSONEncoder):
         '''The method called first when encoding'''
         if isinstance(obj, Key):
             #When the instance is a Key, just include the type and id
-            return {CLASS_TYPE_STR:obj.kind(), ID_STR:obj.id()}
+            return {CLASS_TYPE_STR:obj.kind(), ID_STR:obj.id(), REF_STR:True}
         elif isinstance(obj, Data):
             #When the instance is a model type 'Data', we obviously can't
             #send the binary (unless we encoded it as base64 -- which
             #is too expensive) so we just attach the object information
-            return {CLASS_TYPE_STR:obj.key().kind(), ID_STR:obj.key().id()}
+            return {CLASS_TYPE_STR:obj.key().kind(), ID_STR:obj.key().id(), REF_STR:True}
         elif isinstance(obj, Model):
             #When we have a Model object, we simply grab all properties 
             properties = obj.properties()

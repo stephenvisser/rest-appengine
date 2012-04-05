@@ -11,6 +11,7 @@ var dispatcher = _.clone(Backbone.Events);
 
 var DO_APP_CONTENT_CHANGE_EVENT = 'app:set';
 var DID_APP_CONTENT_CHANGE_EVENT = 'app:change';
+var ADD_PROPERTY_EVENT = 'entity:addProp';
 
 //Our model couldn't be simpler.
 ModelEntity = Backbone.Model.extend({});
@@ -161,7 +162,10 @@ EntityWidget = Backbone.View.extend({
 		}
 		else if(result=="file")
 		{
-			//TODO: Support files
+			new FilePicker({propName:this.$('#new-key').val(), model:this.model}).$el.modal('show');
+			//Don't actually add something to the main... the 
+			//modal will do this.
+			return;
 		}
 		else if(/^\d+$/.test(result))
 		{
@@ -195,6 +199,9 @@ EntityWidget = Backbone.View.extend({
 		if (this.model)
 		{
 			this.$('#add-prop-button').removeClass('disabled');
+			this.$('input').removeClass('disabled').prop('disabled',false)
+;
+
 			
 			//Empty all current elements
 			this.$('#prop-list').empty();
@@ -222,20 +229,21 @@ EntityWidget = Backbone.View.extend({
 			//Get the bottom form which will change according to 
 			//whether or not this is an entity that exists in the database
 			var controlForm = this.$('#entity-control');
-			var saveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-primary save").html("Save");
+			var saveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-primary save").html("Save");
 			controlForm.html(saveButton);
 			
 			if (this.model.id)
 			{
-				var deleteButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-danger delete").html("Delete");
+				var deleteButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-danger delete").html("Delete");
 				controlForm.append(deleteButton);
-				var retrieveButton = $(document.createElement('button')).attr("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
+				var retrieveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
 				controlForm.append(retrieveButton);
 			}
 		}
 		else
 		{
 			this.$('#add-prop-button').addClass('disabled');
+			this.$('input').addClass('disabled').prop('disabled',true);
 		}
 	}
 });
@@ -488,8 +496,6 @@ EntitySidebarWidget = Backbone.View.extend({
 	}
 });
 
-
-
 //The sync class is what backbone uses to sync to the server. It 
 //uses a weird method, so I'm doing all the $.ajax calls manually.
 Backbone.sync = function(method, model) {
@@ -523,6 +529,70 @@ Backbone.sync = function(method, model) {
 		});
 	}
 };
+
+FilePicker = Backbone.View.extend({
+	//This is the constructor of the view. From other tutorials, 
+	//it's common shorthand just to render the view.
+	initialize: function(){
+		this.propName = this.options.propName;
+		this.model = this.options.model;
+		this.render();
+		this.$('#file-type-input').val('audio/mp4');
+	},
+	//These two attributes define the type of HTML element this
+	//view is
+	tagName: 'div',
+	className: 'modal fade',
+	//This defines what happens when this view is rendered.
+	render: function(){
+		//This takes a template from our HTML file and creates 
+		//The modal HTML from this markup
+		this.el.innerHTML = $('#modal-body-template').html();
+	},
+	propName:null,
+	model:null,
+	//These events represent any handling that the view needs
+	//The only event we're interested in is when the allDone button
+	//is pressed
+	events: {"click button": "allDone",
+		//We also provide the user with a shortcut to press the enter
+		//key as an alternate way to exit
+		"keypress input": function(event){
+			if (event.which == 13)
+			{
+				this.allDone();
+			}
+	}},
+	//Simply set the type of the current model entity and then hide
+	allDone: function(){
+		input = document.getElementById('file-input');
+		if (!input.files) {
+			alert("This browser doesn't seem to support the `files` property of file inputs.");
+		}
+		else if (!input.files[0]) {
+			alert("Please select a file before clicking 'Load'");
+		}
+		else {
+			file = input.files[0];
+			fr = new FileReader();
+			fr.onload = _.bind(function(fr){
+				var fileData = fr.target.result;
+				$.ajax({
+					contentType:this.$('#file-type-input').val(),
+					success:function(data, textStatus, jqXHR){
+						this.model.set(this.propName, {__type:"Data",__id:parseInt(data,10),__ref:true});
+						this.$el.modal('hide');
+					},
+					context:this,
+					data:fileData,
+					processData:false,
+					url:'/api',
+					type:'POST'
+				});},this);
+			fr.readAsText(file);
+		}
+	}
+});
 
 //JQuery to english: 'When the page is done loading, perform this function'
 $(function(){

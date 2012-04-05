@@ -5,7 +5,6 @@ Created on Mar 23, 2012
 '''
 
 import webapp2
-import json
 import logging
 import re
 
@@ -30,37 +29,25 @@ class Rest(webapp2.RequestHandler):
     def post(self):
         '''Handles POST requests'''
 
-        match = re.match(r'^/api$',
+        match = re.match(r'^/api(?:/(?P<entity>\w+)(?:/(?P<id>\d+))?)?$',
                          self.request.path_info)
         if match:
             if self.request.content_type == 'application/json':
+                if match.group('entity') or match.group('id'):
+                    raise MalformedURLException("If you are posting data, set content-type as appropriate. If you're using json, check your url: should be '/api'")
+
                 #Simple: Load the JSON values that were sent to the server
                 newObj = parser.put_model_obj(self.request.body)
-            elif self.request.content_type.startswith('multipart/form-data'):
-                
-                #Iterate through all the fields in this multipart request
-                itemIter = iter(self.request.POST.items())
-                #We don't care what the root property name is, just the value
-                root_json_value = itemIter.next()[1]
-                
-                #We are cheating a little by adding the properties in the data parts
-                #of the multipart requests in as strings. This is just to avoid
-                #multiple writes to the DB.
-                root_dict = json.loads(root_json_value)
-
-                for next_prop_name, next_form_field in itemIter:
-                    data_key = Data(data=db.Blob(next_form_field.value),contentType=next_form_field.type).put()
-                    root_dict[next_prop_name] = parser.dict_from_key(data_key)
-                
-                newObj = parser.put_model_obj(json.dumps(root_dict))
             else:
-                raise NotImplementedError('We don\'t support this content-type %s' 
-                                          % self.request.content_type)
+                #We store all others as data. This means that we remember the content
+                #type and host the data at its own URL instead of embedding it in JSON
+                newObj = Data(data=db.Blob(str(self.request.body)),contentType=self.request.content_type)
+                newObj.put()
                 
             #Write back the id of the new object
             self.response.write(str(newObj.key().id()))
         else:
-            raise MalformedURLException("When posting, we only support the '/api' URL")
+            raise MalformedURLException("When posting, we only support the '/api' URL (/api/<type>/<id> is supported for Data requests)")
         
     def _convert_filter_to_type(self,model_cls, property_name, filter_value):
         '''Converts a filter value to its appropriate data type based on its property value'''

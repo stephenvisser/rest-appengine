@@ -54,7 +54,7 @@ class Test(unittest.TestCase):
                                        'devices':['device1','device2']},
                                        userResult,'User')
         dataResult = result['sound']
-        self.assertDictEqual({'__id':dataKey.id(),'__type':'Data'}, dataResult, 'Sound Properties are present')
+        self.assertDictEqual({'__id':dataKey.id(),'__type':'Data', '__ref':True}, dataResult, 'Sound Properties are present')
         
         locationResult = result['location']
         self.assertEqual('-13.321,122.332',locationResult);
