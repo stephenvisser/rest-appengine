@@ -32,7 +32,6 @@ class Rest(webapp2.RequestHandler):
         match = re.match(r'^/api(?:/(?P<entity>\w+)(?:/(?P<id>\d+))?)?$',
                          self.request.path_info)
         if match:
-            logging.getLogger().info('The content-type is: ' + self.request.content_type)
             if self.request.content_type == 'application/json':
                 if match.group('entity') or match.group('id'):
                     raise MalformedURLException("If you are posting data, set content-type as appropriate. If you're using json, check your url: should be '/api'")
@@ -60,8 +59,9 @@ class Rest(webapp2.RequestHandler):
         #Gets the data_type (Property objects we define on our model objects)
         attrType = getattr(model_cls, property_name).data_type
 
+        logging.getLogger().info('%s is of type %s' %(property_name,attrType))
         if issubclass(attrType, basestring):
-            queryValue = filter_value
+            queryValue = str(filter_value)
         elif issubclass(attrType, int):
             queryValue = int(filter_value)
         elif issubclass(attrType, db.Model):
@@ -134,6 +134,7 @@ class Rest(webapp2.RequestHandler):
         for prop_name,filter_value in result.iteritems():
             converted_filter_value = self._convert_filter_to_type(cls, prop_name,filter_value)
             query.filter(prop_name, converted_filter_value)
+            logging.getLogger().info('%s is %s of type %s' %(prop_name, converted_filter_value, str(converted_filter_value.__class__)))
 
         #Iterate through the responses. Implicitly fetches the results
         allItems = query.fetch(int(fetch),int(offset));
