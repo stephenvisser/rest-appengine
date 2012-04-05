@@ -63,16 +63,25 @@ body {padding-top:20px;}
 
 </script>
 
+<script type="text/html" id="audio-player">
+<tr><td>
+<audio controls="controls">
+  <source src="<%=path%>" type="<%=type%>" />
+</audio></td></tr>
+</script>
+
 <script type="text/html" id="modal-body-template">
   <div class="modal-header">
-    <h3>Enter name</h3>
+    <h3>Choose File</h3>
   </div>
   <div class="modal-body">
-    <input type="text" id="file-type-input">
-    <input type="file" id="file-input">
+    <form target="frame" method="POST" action="/api" id="file-upload-form" enctype="multipart/form-data">
+    <input name="data" type="file" id="file-path-input">
+    <input type="submit">
+    </form>
+    <textarea rows="1" cols="1" style="visibility:hidden" id="response"></textarea>
  </div>
   <div class="modal-footer">
-    <button type="button" class="btn btn-primary">OK</button>
   </div>
 </script>
 
@@ -80,6 +89,7 @@ body {padding-top:20px;}
 
 </head>
 <body>
+<iframe id="frame" name="frame" src="" style="width:0;height:0;border:0"></iframe>
 <div class="container-fluid">
   <div class="row-fluid">
     <div class="span4" id="side-content">
@@ -99,5 +109,6 @@ body {padding-top:20px;}
 <script src="web/bootstrap/js/bootstrap-typeahead.js" type="text/javascript"></script>
 <script src="web/bootstrap/js/bootstrap-modal.js" type="text/javascript"></script>
 <script src="web/bootstrap/js/bootstrap-alert.js" type="text/javascript"></script>
+<script src="http://malsup.github.com/jquery.form.js"></script>
 <script src="web/script.js" type="text/javascript"></script>
 </html>

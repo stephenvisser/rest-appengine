@@ -112,7 +112,7 @@ class _ExtendedJSONEncoder(json.JSONEncoder):
             #When the instance is a model type 'Data', we obviously can't
             #send the binary (unless we encoded it as base64 -- which
             #is too expensive) so we just attach the object information
-            return {CLASS_TYPE_STR:obj.key().kind(), ID_STR:obj.key().id(), REF_STR:True}
+            return {CLASS_TYPE_STR:obj.key().kind(), ID_STR:obj.key().id(), REF_STR:True, "__contentType":obj.contentType}
         elif isinstance(obj, Model):
             #When we have a Model object, we simply grab all properties 
             properties = obj.properties()

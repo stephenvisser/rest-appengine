@@ -13,6 +13,29 @@ var DO_APP_CONTENT_CHANGE_EVENT = 'app:set';
 var DID_APP_CONTENT_CHANGE_EVENT = 'app:change';
 var ADD_PROPERTY_EVENT = 'entity:addProp';
 
+var sendtoserver=function(data, contentType){
+	try{
+		var xml = new XMLHttpRequest();
+
+		xml.open('POST','/api',true);
+
+		xml.setRequestHeader("content-type",contentType);
+		xml.onreadystatechange=function(){
+			try{
+				if(xml.readyState==4){
+				}
+			}
+			catch(e){}
+		};
+
+		xml.send(data);
+	}
+	catch(e){
+			}
+};
+
+
+
 //Our model couldn't be simpler.
 ModelEntity = Backbone.Model.extend({});
 
@@ -199,45 +222,56 @@ EntityWidget = Backbone.View.extend({
 		if (this.model)
 		{
 			this.$('#add-prop-button').removeClass('disabled');
-			this.$('input').removeClass('disabled').prop('disabled',false)
-;
+			this.$('input').removeClass('disabled').prop('disabled',false);
 
-			
 			//Empty all current elements
 			this.$('#prop-list').empty();
-			//Go through all current properties and add a line for each.
-			for (var property in this.model.attributes)
+			
+			if (this.model.attributes.__type == "Data")
 			{
-				var newRow = $(document.createElement('tr'));
-				var newName = $(document.createElement('td'));
-				newName.html(property);
-				newRow.append(newName);
-				var newVal = $(document.createElement('td'));
-				var propVal = this.model.attributes[property];
-				if (propVal instanceof Object || propVal instanceof Array)
-				{
-					newVal.html(JSON.stringify(propVal));
-				}
-				else
-				{
-					newVal.html(propVal);
-				}
-				newRow.append(newVal);
-				this.$('#prop-list').append(newRow);
+				this.$('#prop-list').append(_.template($('#audio-player').html(),{path:'/api/Data/'+this.model.attributes.__id,type:this.model.attributes.__contentType}));
 			}
-			
-			//Get the bottom form which will change according to 
-			//whether or not this is an entity that exists in the database
-			var controlForm = this.$('#entity-control');
-			var saveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-primary save").html("Save");
-			controlForm.html(saveButton);
-			
-			if (this.model.id)
-			{
-				var deleteButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-danger delete").html("Delete");
-				controlForm.append(deleteButton);
-				var retrieveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
-				controlForm.append(retrieveButton);
+			else
+				{
+				//Go through all current properties and add a line for each.
+				for (var property in this.model.attributes)
+				{
+					var newRow = $(document.createElement('tr'));
+					var newName = $(document.createElement('td'));
+					newName.html(property);
+					newRow.append(newName);
+					var newVal = $(document.createElement('td'));
+					var propVal = this.model.attributes[property];
+					
+					if (propVal.hasOwnProperty('__ref'))
+					{
+						newVal.html($(document.createElement('ul')).addClass('nav').html(new EntitySidebarWidget({model:new ModelEntity(propVal)}).el));
+					}
+					else if (propVal instanceof Object || propVal instanceof Array)
+					{
+						newVal.html(JSON.stringify(propVal));
+					}
+					else
+					{
+						newVal.html(propVal);
+					}
+					newRow.append(newVal);
+					this.$('#prop-list').append(newRow);
+				}
+				
+				//Get the bottom form which will change according to 
+				//whether or not this is an entity that exists in the database
+				var controlForm = this.$('#entity-control');
+				var saveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-primary save").html("Save");
+				controlForm.html(saveButton);
+				
+				if (this.model.id)
+				{
+					var deleteButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-danger delete").html("Delete");
+					controlForm.append(deleteButton);
+					var retrieveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
+					controlForm.append(retrieveButton);
+				}
 			}
 		}
 		else
@@ -537,7 +571,6 @@ FilePicker = Backbone.View.extend({
 		this.propName = this.options.propName;
 		this.model = this.options.model;
 		this.render();
-		this.$('#file-type-input').val('audio/mp4');
 	},
 	//These two attributes define the type of HTML element this
 	//view is
@@ -548,50 +581,19 @@ FilePicker = Backbone.View.extend({
 		//This takes a template from our HTML file and creates 
 		//The modal HTML from this markup
 		this.el.innerHTML = $('#modal-body-template').html();
+		this.$('#response').onchange = _.bind(function(){
+			alert(this.$('#response').html());
+		},this);
+		this.$('#file-upload-form').ajaxForm({ 
+			target:'#response',
+			success:_.bind(function(xhr){
+				var something = this.$('#response').val();
+				this.model.set(this.propName,{__type:'Data',__id:parseInt(this.$('#response').val(), 10),__ref:true,__contentType:'audio/mpeg'});
+				this.$el.modal('hide');
+			},this)});
 	},
 	propName:null,
-	model:null,
-	//These events represent any handling that the view needs
-	//The only event we're interested in is when the allDone button
-	//is pressed
-	events: {"click button": "allDone",
-		//We also provide the user with a shortcut to press the enter
-		//key as an alternate way to exit
-		"keypress input": function(event){
-			if (event.which == 13)
-			{
-				this.allDone();
-			}
-	}},
-	//Simply set the type of the current model entity and then hide
-	allDone: function(){
-		input = document.getElementById('file-input');
-		if (!input.files) {
-			alert("This browser doesn't seem to support the `files` property of file inputs.");
-		}
-		else if (!input.files[0]) {
-			alert("Please select a file before clicking 'Load'");
-		}
-		else {
-			file = input.files[0];
-			fr = new FileReader();
-			fr.onload = _.bind(function(fr){
-				var fileData = fr.target.result;
-				$.ajax({
-					contentType:this.$('#file-type-input').val(),
-					success:function(data, textStatus, jqXHR){
-						this.model.set(this.propName, {__type:"Data",__id:parseInt(data,10),__ref:true});
-						this.$el.modal('hide');
-					},
-					context:this,
-					data:fileData,
-					processData:false,
-					url:'/api',
-					type:'POST'
-				});},this);
-			fr.readAsText(file);
-		}
-	}
+	model:null
 });
 
 //JQuery to english: 'When the page is done loading, perform this function'

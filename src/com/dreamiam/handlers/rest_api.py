@@ -32,16 +32,21 @@ class Rest(webapp2.RequestHandler):
         match = re.match(r'^/api(?:/(?P<entity>\w+)(?:/(?P<id>\d+))?)?$',
                          self.request.path_info)
         if match:
+            logging.getLogger().info('The content-type is: ' + self.request.content_type)
             if self.request.content_type == 'application/json':
                 if match.group('entity') or match.group('id'):
                     raise MalformedURLException("If you are posting data, set content-type as appropriate. If you're using json, check your url: should be '/api'")
 
                 #Simple: Load the JSON values that were sent to the server
                 newObj = parser.put_model_obj(self.request.body)
-            else:
+            elif self.request.content_type == 'multipart/form-data':
+                content = self.request.POST.items()[0][1];
+                newObj = Data(data=db.Blob(content.value),contentType=content.type);
+                newObj.put();
+            else:    
                 #We store all others as data. This means that we remember the content
                 #type and host the data at its own URL instead of embedding it in JSON
-                newObj = Data(data=db.Blob(str(self.request.body)),contentType=self.request.content_type)
+                newObj = Data(data=db.Blob(self.request.body),contentType=self.request.content_type)
                 newObj.put()
                 
             #Write back the id of the new object
