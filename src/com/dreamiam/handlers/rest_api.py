@@ -8,10 +8,11 @@ import webapp2
 import logging
 import re
 
-from google.appengine.ext.db import metadata
+from google.appengine.ext.ndb import metadata
+from google.appengine.ext import ndb
 
 from com.dreamiam import parser
-from com.dreamiam.model import * #@UnusedWildImport
+from com.dreamiam.model import User, Data, Entry
 
 class MalformedURLException(Exception):
     '''
@@ -35,42 +36,24 @@ class Rest(webapp2.RequestHandler):
             if self.request.content_type == 'application/json':
                 if match.group('entity') or match.group('id'):
                     raise MalformedURLException("If you are posting data, set content-type as appropriate. If you're using json, check your url: should be '/api'")
-
+                logging.getLogger().info("Do something here" + str(dir(parser)))
                 #Simple: Load the JSON values that were sent to the server
                 newObj = parser.put_model_obj(self.request.body)
             elif self.request.content_type == 'multipart/form-data':
                 content = self.request.POST.items()[0][1];
-                newObj = Data(data=db.Blob(content.value),contentType=content.type);
+                newObj = Data(data=content.value,contentType=content.type);
                 newObj.put();
             else:    
                 #We store all others as data. This means that we remember the content
                 #type and host the data at its own URL instead of embedding it in JSON
-                newObj = Data(data=db.Blob(self.request.body),contentType=self.request.content_type)
+                newObj = Data(data=self.request.body,contentType=self.request.content_type)
                 newObj.put()
                 
             #Write back the id of the new object
-            self.response.write(str(newObj.key().id()))
+            self.response.write(str(newObj.key.id()))
         else:
             raise MalformedURLException("When posting, we only support the '/api' URL (/api/<type>/<id> is supported for Data requests)")
         
-    def _convert_filter_to_type(self,model_cls, property_name, filter_value):
-        '''Converts a filter value to its appropriate data type based on its property value'''
-
-        #Gets the data_type (Property objects we define on our model objects)
-        attrType = getattr(model_cls, property_name).data_type
-
-        logging.getLogger().info('%s is of type %s' %(property_name,attrType))
-        if issubclass(attrType, basestring):
-            queryValue = str(filter_value)
-        elif issubclass(attrType, int):
-            queryValue = int(filter_value)
-        elif issubclass(attrType, db.Model):
-            queryValue = db.Key.from_path(attrType.__name__, int(filter_value))
-        else:
-            raise MalformedURLException("We can't handle a filter on property \
-                '%s' in class '%s' of type: '%s'" % (property_name, model_cls, attrType))
-        return queryValue
-    
     def _get_filters(self):
         filters = self.request.get_all('filter')        
         #Clever way to create a dictionary of propNames to values
@@ -101,14 +84,13 @@ class Rest(webapp2.RequestHandler):
         #filters the user may have set
         resultArray = []
         #Start by retrieving the object
-        entireObj = db.get(key)
+        entireObj = key.get()
         #Change to an array if this object doesn't exist
         if entireObj:
             #Optimistically putting the obj as a result
             resultArray.append(entireObj)
             for prop_name,filter_value in result.iteritems():
-                converted_filter_value = self._convert_filter_to_type(cls, prop_name,filter_value)
-                if getattr(entireObj,prop_name) != converted_filter_value:
+                if getattr(entireObj,prop_name) != filter_value:
                     #Failed to match a filter so remove it as a match
                     del resultArray[0]
                     break
@@ -125,19 +107,16 @@ class Rest(webapp2.RequestHandler):
         # Create local variables for all the request variables
         #=======================================================================
         isLoadKeysOnly = self.request.get('load') != 'all'
-        fetch,offset = self.request.get('fetch','20,0').split(',')
         
-        query = db.Query(cls,keys_only=isLoadKeysOnly)
+        query = cls.query()
 
         result = self._get_filters();
 
         for prop_name,filter_value in result.iteritems():
-            converted_filter_value = self._convert_filter_to_type(cls, prop_name,filter_value)
-            query.filter(prop_name, converted_filter_value)
-            logging.getLogger().info('%s is %s of type %s' %(prop_name, converted_filter_value, str(converted_filter_value.__class__)))
+            query = query.filter(getattr(cls,prop_name) == filter_value)
 
         #Iterate through the responses. Implicitly fetches the results
-        allItems = query.fetch(int(fetch),int(offset));
+        allItems = query.fetch(keys_only=isLoadKeysOnly);
         
         #If the policy is to create an object if it doesn't already exist,
         #we should do that here
@@ -162,12 +141,12 @@ class Rest(webapp2.RequestHandler):
 
         if model_type == 'Data':
             #Convert the content-type to string or else badness happens
-            data = db.get(db.Key.from_path(model_type, model_id))
+            data = ndb.Key(model_type, model_id).get()
             self.response.headers['Content-Type'] = str(data.contentType)
             self.response.write(data.data)
         else:
             #Create the key
-            obj_key = db.Key.from_path(model_type, model_id)
+            obj_key = ndb.Key(model_type, model_id)
             
             #Do some weird voodoo magic to do the bidding of
             #various optional parameters
@@ -185,9 +164,10 @@ class Rest(webapp2.RequestHandler):
         isLoadKeysOnly = self.request.get('load') != 'all'
 
         allEntities = []
-        for k in metadata.Kind.all():
-            if not k.kind_name.startswith('_'):
-                allEntities.extend(globals()[k.kind_name].all(keys_only=isLoadKeysOnly))
+        for k in metadata.get_kinds():
+            logging.getLogger().info("TYPE:" + k)
+            if not k.startswith('_'):
+                allEntities.extend(globals()[k].query().fetch(keys_only=isLoadKeysOnly))
         self.response.headers['Content-Type'] = "application/json"
         self.response.write(parser.get_json_string(allEntities))
     
@@ -221,27 +201,26 @@ class Rest(webapp2.RequestHandler):
             if object_type:
                 property_to_delete = self.request.get('propogate')
                 if object_id:
-                    deleteObjKey = db.Key.from_path(object_type, int(object_id))
-                    returned_obj = db.get(deleteObjKey)
+                    deleteObjKey = ndb.Key(object_type, int(object_id))
+                    returned_obj = deleteObjKey.get()
                     logging.getLogger().warn('Attempting to delete: %s, with id: %s and got this: %s' %(object_type, object_id, returned_obj))
                     if property_to_delete:
-                        db.delete(getattr(returned_obj,property_to_delete))
-                    db.delete(deleteObjKey)
+                        getattr(returned_obj,property_to_delete).delete()
+                    deleteObjKey.delete()
                 else:
                     if self.request.get('force') == 'yes':
                         keysOnlyBool = property_to_delete == None
                         for key in globals()[object_type].all(keys_only=keysOnlyBool):
                             if property_to_delete:
-                                db.delete(getattr(key,property_to_delete))
-                            db.delete(key)
+                                getattr(key,property_to_delete).delete()
+                            key.delete()
                     else:
                         raise SyntaxError("MUST use 'force'='yes' to do this mode of delete")
             else:
                 if self.request.get('force') == 'yes':
-                    for k in metadata.Kind.all():
+                    for k in metadata.get_kinds():
                         if not k.kind_name.startswith('_'):
-                            for o in globals()[k.kind_name].all(keys_only=True):
-                                db.delete(o)
+                            ndb.delete_multi(globals()[k.kind_name].query().fetch(keys_only=True))
                 else:
                     raise SyntaxError("MUST use 'force'='yes' to do this mode of delete")
         else:

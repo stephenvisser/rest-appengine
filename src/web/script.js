@@ -180,7 +180,7 @@ EntityWidget = Backbone.View.extend({
 			var match = /^(\w+):(\d+)$/.exec(result);
 			if(match)
 			{
-				result = {__type:match[1],__id:parseInt(match[2], 10),__ref:true};				
+								
 			}
 			else
 			{
@@ -223,13 +223,9 @@ EntityWidget = Backbone.View.extend({
 					{
 						newVal.html($(document.createElement('ul')).addClass('nav').html(new EntitySidebarWidget({model:new ModelEntity(propVal)}).el));
 					}
-					else if (propVal instanceof Object || propVal instanceof Array)
-					{
-						newVal.html(JSON.stringify(propVal));
-					}
 					else
 					{
-						newVal.html(propVal);
+						newVal.html(JSON.stringify(propVal));
 					}
 					newRow.append(newVal);
 					this.$('#prop-list').append(newRow);
@@ -323,12 +319,7 @@ ExplorerWidget = Backbone.View.extend({
 		//The current text in the search box
 		var searchBoxContents = this.$('#search-text').val();
 		
-		var targetURL = '/api';
-		//If there is nothing, then we will search for all objects
-		if(searchBoxContents.length > 0)
-		{
-			targetURL += '/' + searchBoxContents;
-		}
+		var targetURL = '/api' + searchBoxContents;
 		//Call create collections to create the lists of different objects
 		$.ajax({url:targetURL, success:_.bind(function(data, textStatus, jqXHR){
 			this.createCollections(data);

@@ -5,10 +5,11 @@ Created on Mar 22, 2012
 '''
 
 import json
-from google.appengine.ext.db import Key
-from google.appengine.ext.db import Model
+import logging
 
-from com.dreamiam.model import * #@UnusedWildImport
+from google.appengine.ext import ndb
+
+from com.dreamiam.model import User, Data, Entry
 
 CLASS_TYPE_STR = '__type'
 ID_STR = '__id'
@@ -28,53 +29,54 @@ def put_model_obj(json_string):
     def _hook_to_object(dct):
         '''
         This is the method that is called every time we are decoding a JSON
-        object. Since objects must be stored as their keys, this method makes
-        the assumption that if only the __type and __id properties are present,
-        we will just create a reference. If any additional properties are 
-        present AND __id, then we will overwrite the existing object without 
-        any discernment. Finally, if no __id is present, we will store this as
-        a brand new object
+        object. The difference between key objects and regular objects is that
+        key objects will have the __ref property set to true. If the __ref attribute
+        is not present, we create brand new objects if the __id isn't set or overwrite
+        if the __id IS set.
         '''
         try:
+            logging.getLogger().info('Evaluating: %s' % str(dct))
+
             #Retrieves the class type and ID which are special tags
-            #WILL THROW KeyError if '__type' tag doesn't exist
+            #WILL THROW KeyError if '__type' tag doesn't exist.
+            #This is an ellegal state.
             clsType = dct[CLASS_TYPE_STR]
             #Using get() here means we won't get a KeyError (just None)
             clsId = dct.get(ID_STR)
             #We now support a more robust way of defining references in our
-            #code. Any JSON object that contains __reference=true will be
+            #code. Any JSON object that contains __ref=true will be
             #evaluated as such.
             clsReference = dct.get(REF_STR)
         
             if clsReference:
                 #If only the __type and __id properties exist
-                return Key.from_path(clsType, clsId)
+                return ndb.Key(clsType, clsId)
 
             #Keys in JSON object that start with '__' are reserved.
             dictCopy = dict((key, value) for key, value in dct.iteritems() if not key.startswith('__'))
             
-            try:
-                if clsId:
-                    #If there is an __id property, we should set the key of the
-                    #object too in the next line. This can only be set in the
-                    #constructor
-                    dictCopy['key'] = Key.from_path(clsType, clsId)
+            #If there is an __id property, we should set the key of the
+            #object too in the next line. This can only be set in the
+            #constructor
+            dictCopy['id'] = clsId
 
-                #This line is slightly confusing. It will look up the desired
-                #class in the list of global names and create an object with all
-                #instance variables initialized using the dictionary values
+            #This line is slightly confusing. It will look up the desired
+            #class in the list of global names and create an object with all
+            #instance variables initialized using the dictionary values
+            
+            logging.getLogger().info('The objects are: %s' % str(dictCopy))
+            
+            try:                
                 newObj = globals()[clsType](**dictCopy)
             
-                if isinstance(newObj, Model):
-                    #We are keeping track of all the objects we are implicitly
-                    #adding to the DB. This is the only way I could find to keep
-                    #track of the actual objects so that we could return objects
-                    #rather than keys; the nature of the recursive parsing will
-                    #guarantee that the last object appended to this list will 
-                    #be the root object
-                    list_of_objects.append(newObj)
-                    return newObj.put()
-                return newObj
+                #We are keeping track of all the objects we are implicitly
+                #adding to the DB. This is the only way I could find to keep
+                #track of the actual objects so that we could return objects
+                #rather than keys; the nature of the recursive parsing will
+                #guarantee that the last object appended to this list will 
+                #be the root object
+                list_of_objects.append(newObj)
+                return newObj.put()
             except KeyError as key:
                 #if globals() dict doesn't contain the relevant class
                 newErr = SyntaxError('We don\'t support class type: %s' % clsType)
@@ -101,27 +103,29 @@ class _ExtendedJSONEncoder(json.JSONEncoder):
     '''Custom Encoder that can handle Model objects'''
     def default(self, obj):
         '''The method called first when encoding'''
-        if isinstance(obj, Key):
+        if isinstance(obj, ndb.Key):
             #When the instance is a Key, just include the type and id
             return {CLASS_TYPE_STR:obj.kind(), ID_STR:obj.id(), REF_STR:True}
         elif isinstance(obj, Data):
             #When the instance is a model type 'Data', we obviously can't
             #send the binary (unless we encoded it as base64 -- which
             #is too expensive) so we just attach the object information
-            return {CLASS_TYPE_STR:obj.key().kind(), ID_STR:obj.key().id(), REF_STR:True, "__contentType":obj.contentType}
-        elif isinstance(obj, Model):
+            return {CLASS_TYPE_STR:obj.key.kind(), ID_STR:obj.key.id(), REF_STR:True, "__contentType":obj.contentType}
+        elif isinstance(obj, ndb.Model):
             #When we have a Model object, we simply grab all properties 
-            properties = obj.properties()
-            dictCopy = {CLASS_TYPE_STR:obj.key().kind(), ID_STR: obj.key().id()}
-            for key, propType in properties.iteritems():
-                #Ignore values that are null
+            logging.getLogger().info(str(obj.__dict__))
+            properties = obj.to_dict()
+            logging.getLogger().info(properties)
+
+            dictCopy = {CLASS_TYPE_STR:obj.key.kind(), ID_STR: obj.key.id()}
+            for key in properties:
+                #Ignore values that are null or are empty arrays
                 value = getattr(obj,key)
-                if value  or (isinstance(propType, db.ListProperty) and len(value) > 0):
+                if value  or (isinstance(value, list) and len(value) > 0):
                     dictCopy[key] = value
             return dictCopy
         elif isinstance(obj, object):
-            #Currently this is used for db.GeoPt properties. We just
-            #convert properties directly into their dictionary representation
+            logging.getLogger().info('Interpreting: %s as an object',(obj,))
             return str(obj)
         
         #If we haven't yet found an exact match, use the default
