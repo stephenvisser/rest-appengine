@@ -76,7 +76,7 @@ body {padding-top:20px;}
   </div>
   <div class="modal-body">
     <p>The selected file will be uploaded to the server as type 'Data' and a reference to the newly-created object will be stored as a new property in the object you are editing. <strong>Note: </strong> The content type will be inferred by the browser. Choose files with appropriate extensions.</p>
-    <form target="frame" method="POST" action="/api" id="file-upload-form" enctype="multipart/form-data">
+    <form target="frame" method="POST" action="/api/Data" id="file-upload-form" enctype="multipart/form-data">
     <input name="data" type="file" id="file-path-input">
     <input type="submit" value="Upload">
     </form>

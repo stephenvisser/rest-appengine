@@ -3,7 +3,7 @@ Created on Mar 22, 2012
 
 @author: visser
 '''
-
+import base64
 import json
 import logging
 
@@ -103,25 +103,20 @@ class _ExtendedJSONEncoder(json.JSONEncoder):
     '''Custom Encoder that can handle Model objects'''
     def default(self, obj):
         '''The method called first when encoding'''
+        logging.getLogger().info(repr(obj))
         if isinstance(obj, ndb.Key):
             #When the instance is a Key, just include the type and id
             return {CLASS_TYPE_STR:obj.kind(), ID_STR:obj.id(), REF_STR:True}
-        elif isinstance(obj, Data):
-            #When the instance is a model type 'Data', we obviously can't
-            #send the binary (unless we encoded it as base64 -- which
-            #is too expensive) so we just attach the object information
-            return {CLASS_TYPE_STR:obj.key.kind(), ID_STR:obj.key.id(), REF_STR:True, "__contentType":obj.contentType}
         elif isinstance(obj, ndb.Model):
             #When we have a Model object, we simply grab all properties 
-            logging.getLogger().info(str(obj.__dict__))
             properties = obj.to_dict()
-            logging.getLogger().info(properties)
 
             dictCopy = {CLASS_TYPE_STR:obj.key.kind(), ID_STR: obj.key.id()}
-            for key in properties:
+            for key,value in properties.iteritems():
                 #Ignore values that are null or are empty arrays
-                value = getattr(obj,key)
                 if value  or (isinstance(value, list) and len(value) > 0):
+                    if key == '__data':
+                        value = 'moo'
                     dictCopy[key] = value
             return dictCopy
         elif isinstance(obj, object):

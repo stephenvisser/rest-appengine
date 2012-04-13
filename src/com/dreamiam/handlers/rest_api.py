@@ -26,33 +26,38 @@ class Rest(webapp2.RequestHandler):
     completely control our data model. It should be self-documenting to
     a certain degree
     '''
+    
+    def _handle_data(self, body, content_type):
+        match = re.match(r'^/api(?:/(?P<entity>\w+)(?:/(?P<id>\d+))?)$',
+                     self.request.path_info)
+        if not match:
+            raise MalformedURLException("If you are posting data, you need to specify the class type. Most likely 'Data'")
+
+        newObj = globals()[match.group('entity')](data=body,contentType=content_type, id=match.group('id'))
+        newObj.put()
+        return newObj
         
     def post(self):
         '''Handles POST requests'''
 
-        match = re.match(r'^/api(?:/(?P<entity>\w+)(?:/(?P<id>\d+))?)?$',
+        if self.request.content_type == 'application/json':
+            match = re.match(r'^/api$',
                          self.request.path_info)
-        if match:
-            if self.request.content_type == 'application/json':
-                if match.group('entity') or match.group('id'):
-                    raise MalformedURLException("If you are posting data, set content-type as appropriate. If you're using json, check your url: should be '/api'")
-                logging.getLogger().info("Do something here" + str(dir(parser)))
-                #Simple: Load the JSON values that were sent to the server
-                newObj = parser.put_model_obj(self.request.body)
-            elif self.request.content_type == 'multipart/form-data':
-                content = self.request.POST.items()[0][1];
-                newObj = Data(data=content.value,contentType=content.type);
-                newObj.put();
-            else:    
-                #We store all others as data. This means that we remember the content
-                #type and host the data at its own URL instead of embedding it in JSON
-                newObj = Data(data=self.request.body,contentType=self.request.content_type)
-                newObj.put()
+            if not match:
+                raise MalformedURLException("If you are posting data, set content-type as appropriate. If you're using json, check your url: should be '/api'")
+            logging.getLogger().info("Do something here" + str(dir(parser)))
+            #Simple: Load the JSON values that were sent to the server
+            newObj = parser.put_model_obj(self.request.body)
+        elif self.request.content_type == 'multipart/form-data':
+            content = self.request.POST.items()[0][1];
+            newObj = self._handle_data(content.value, content.type)
+        else:    
+            #We store all others as data. This means that we remember the content
+            #type and host the data at its own URL instead of embedding it in JSON
+            newObj = self._handle_data(self.request.body, self.request.content_type)
                 
             #Write back the id of the new object
-            self.response.write(str(newObj.key.id()))
-        else:
-            raise MalformedURLException("When posting, we only support the '/api' URL (/api/<type>/<id> is supported for Data requests)")
+        self.response.write(str(newObj.key.id()))
         
     def _get_filters(self):
         filters = self.request.get_all('filter')        
