@@ -61,6 +61,7 @@ class Rest(webapp2.RequestHandler):
         
     def _convert_filter(self, kind, propName, value):
         actualProp = getattr(kind, propName)
+        actualProp._validate(value)
         logging.getLogger().info("The prop is: " + repr(actualProp))
         return propName, actualProp._to_base_type(value);
         
