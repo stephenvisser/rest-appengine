@@ -59,10 +59,15 @@ class Rest(webapp2.RequestHandler):
             #Write back the id of the new object
         self.response.write(str(newObj.key.id()))
         
-    def _get_filters(self):
+    def _convert_filter(self, kind, propName, value):
+        actualProp = getattr(kind, propName)
+        logging.getLogger().info("The prop is: " + repr(actualProp))
+        return propName, actualProp._to_base_type(value);
+        
+    def _get_filters(self, kind):
         filters = self.request.get_all('filter')        
         #Clever way to create a dictionary of propNames to values
-        return dict(item.split(':') for item in filters)        
+        return dict(self._convert_filter(kind, *item.split(':')) for item in filters)        
 
     def _create_if_necessary(self, cls, currentEntity, values):
         if not currentEntity and self.request.get('non_exist') == 'create':
@@ -80,7 +85,7 @@ class Rest(webapp2.RequestHandler):
         '''Performs a search for all items in a filter'''
                 
         #Clever way to create a dictionary of propNames to values
-        result = self._get_filters()
+        result = self._get_filters(key.kind())
         
         #This is what we use to determine if it matches any possible
         #filters the user may have set
@@ -112,9 +117,10 @@ class Rest(webapp2.RequestHandler):
         
         query = cls.query()
 
-        result = self._get_filters();
+        result = self._get_filters(cls);
 
         for prop_name,filter_value in result.iteritems():
+            logging.getLogger().info("The filter is: " + repr(filter_value));
             query = query.filter(getattr(cls,prop_name) == filter_value)
 
         #Iterate through the responses. Implicitly fetches the results
@@ -148,7 +154,7 @@ class Rest(webapp2.RequestHandler):
             #Create the key
             obj_key = ndb.Key(model_type, model_id)
             
-            #Do some weird voodoo magic to do the bidding of
+            #Do some weird voodoo magic to do the binding of
             #various optional parameters
             obj_result = self._perform_filter_on_key(obj_key)
 

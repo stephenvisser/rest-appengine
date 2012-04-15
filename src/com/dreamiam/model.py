@@ -3,6 +3,8 @@ Created on Mar 22, 2012
 
 @author: visser
 '''
+import re
+
 from google.appengine.ext import ndb
 from dateutil import parser,tz
 from google.appengine.ext.ndb.google_imports import datastore_errors
@@ -47,11 +49,13 @@ class StringDateTimeProperty(ndb.DateTimeProperty):
 #This allows us to do smart inferences of keys by just giving the ID.
 class SmartKeyProperty(ndb.KeyProperty):
     def _validate(self, value):
-        if not (isinstance(value, int) or isinstance(value, ndb.Key)):
+        if not ((isinstance(value, basestring) and  re.match(r'^\d+$')) or isinstance(value, int) or isinstance(value, ndb.Key)):
             raise datastore_errors.BadValueError('Expected integer (converted to key) or key; got %r' %
                                                (value,))
     
     def _to_base_type(self, value):
+        if isinstance(value, basestring):
+            return ndb.Key(self._kind, int(value))
         if isinstance(value, int):
             return ndb.Key(self._kind, value)
         return value
@@ -77,11 +81,6 @@ class User(ndb.Model):
     """Models a user of the system"""
     devices = ndb.StringProperty(repeated=True);
     twitterHandle = ndb.StringProperty();
-
-class Data(ndb.Model):
-    """Models any arbitrary data, but in reality is mostly used for sound"""
-    contentType = ndb.StringProperty();
-    data = ndb.BlobProperty();
 
 class Entry(ndb.Model):
     """Models an entry in the journal"""
