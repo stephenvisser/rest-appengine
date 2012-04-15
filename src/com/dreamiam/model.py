@@ -44,12 +44,12 @@ class StringDateTimeProperty(ndb.DateTimeProperty):
         return aDate
     
     def _from_base_type(self, value):
-        return value.isostring()
+        return value.isoformat()
 
 #This allows us to do smart inferences of keys by just giving the ID.
 class SmartKeyProperty(ndb.KeyProperty):
     def _validate(self, value):
-        if not ((isinstance(value, basestring) and  re.match(r'^\d+$')) or isinstance(value, int) or isinstance(value, ndb.Key)):
+        if not ((isinstance(value, basestring) and  re.match(r'^\d+$', value)) or isinstance(value, int) or isinstance(value, ndb.Key)):
             raise datastore_errors.BadValueError('Expected integer (converted to key) or key; got %r' %
                                                (value,))
     
