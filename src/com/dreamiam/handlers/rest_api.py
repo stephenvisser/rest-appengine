@@ -12,7 +12,7 @@ from google.appengine.ext.ndb import metadata
 from google.appengine.ext import ndb
 
 from com.dreamiam import parser
-from com.dreamiam.model import User, Data, Entry
+from com.dreamiam import model
 
 class MalformedURLException(Exception):
     '''
@@ -33,7 +33,7 @@ class Rest(webapp2.RequestHandler):
         if not match:
             raise MalformedURLException("If you are posting data, you need to specify the class type. Most likely 'Data'")
 
-        newObj = globals()[match.group('entity')](data=body,contentType=content_type, id=match.group('id'))
+        newObj = getattr(model, match.group('entity'))(data=body,contentType=content_type, id=match.group('id'))
         newObj.put()
         return newObj
         
@@ -79,9 +79,6 @@ class Rest(webapp2.RequestHandler):
     def _perform_filter_on_key(self, key):
         '''Performs a search for all items in a filter'''
                 
-        #Create the class from the key
-        cls = globals()[key.kind()]
-
         #Clever way to create a dictionary of propNames to values
         result = self._get_filters()
         
@@ -103,7 +100,7 @@ class Rest(webapp2.RequestHandler):
         #Need to make sure the ID is set on any future objects
         result['key'] = key
 
-        return self._create_if_necessary(cls, resultArray, result);
+        return self._create_if_necessary(getattr(model, key.kind()), resultArray, result);
 
     def _perform_filter(self, cls):
         '''Performs a search for all items in a filter'''
@@ -129,9 +126,7 @@ class Rest(webapp2.RequestHandler):
 
     def _write_all_objects_of_type(self, model_type):
         '''This finds all objects of a given type and writes them as a response'''
-        cls = globals()[model_type]
-
-        allItems = self._perform_filter(cls)
+        allItems = self._perform_filter(getattr(model, model_type))
         
         #Write JSON back to the client
         self.response.headers['Content-Type'] = "application/json"
@@ -172,7 +167,7 @@ class Rest(webapp2.RequestHandler):
         for k in metadata.get_kinds():
             logging.getLogger().info("TYPE:" + k)
             if not k.startswith('_'):
-                allEntities.extend(globals()[k].query().fetch(keys_only=isLoadKeysOnly))
+                allEntities.extend(getattr(model, k).query().fetch(keys_only=isLoadKeysOnly))
         self.response.headers['Content-Type'] = "application/json"
         self.response.write(parser.get_json_string(allEntities))
     
@@ -215,7 +210,7 @@ class Rest(webapp2.RequestHandler):
                 else:
                     if self.request.get('force') == 'yes':
                         keysOnlyBool = property_to_delete == None
-                        for key in globals()[object_type].all(keys_only=keysOnlyBool):
+                        for key in getattr(model, object_type).all(keys_only=keysOnlyBool):
                             if property_to_delete:
                                 getattr(key,property_to_delete).delete()
                             key.delete()
@@ -225,7 +220,7 @@ class Rest(webapp2.RequestHandler):
                 if self.request.get('force') == 'yes':
                     for k in metadata.get_kinds():
                         if not k.kind_name.startswith('_'):
-                            ndb.delete_multi(globals()[k.kind_name].query().fetch(keys_only=True))
+                            ndb.delete_multi(getattr(model, k.kind_name).query().fetch(keys_only=True))
                 else:
                     raise SyntaxError("MUST use 'force'='yes' to do this mode of delete")
         else:

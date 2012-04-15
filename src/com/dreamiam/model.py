@@ -58,6 +58,20 @@ class SmartKeyProperty(ndb.KeyProperty):
 
     def _from_base_type(self, value):
         return value
+
+#This allows us to do smart inferences of keys by just giving the ID.
+class SmartBlobProperty(ndb.BlobKeyProperty):
+    def _validate(self, value):
+        if not isinstance(value, basestring):
+            raise datastore_errors.BadValueError('Expected the string key; got %r' %
+                                               (value,))
+    
+    def _to_base_type(self, value):
+        #Takes the last part of the URL as the key
+        return ndb.BlobKey(value.split('/')[-1])
+
+    def _from_base_type(self, value):
+        return '/file_download/%s'%str(value)
     
 class User(ndb.Model):
     """Models a user of the system"""
@@ -74,8 +88,7 @@ class Entry(ndb.Model):
     tags = ndb.StringProperty(repeated=True);
     user = SmartKeyProperty(User);
     timestamp = StringDateTimeProperty();
-    something = ndb.DateProperty();
     location = StringGeoPtProperty();
-    sound = SmartKeyProperty(Data);
+    sound = SmartBlobProperty();
     description = ndb.TextProperty();
     

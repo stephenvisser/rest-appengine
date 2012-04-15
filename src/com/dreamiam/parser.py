@@ -3,13 +3,12 @@ Created on Mar 22, 2012
 
 @author: visser
 '''
-import base64
 import json
 import logging
 
-from google.appengine.ext import ndb
+from com.dreamiam import model
 
-from com.dreamiam.model import User, Data, Entry
+from google.appengine.ext import ndb
 
 CLASS_TYPE_STR = '__type'
 ID_STR = '__id'
@@ -67,7 +66,7 @@ def put_model_obj(json_string):
             logging.getLogger().info('The objects are: %s' % str(dictCopy))
             
             try:                
-                newObj = globals()[clsType](**dictCopy)
+                newObj = getattr(model, clsType)(**dictCopy)
             
                 #We are keeping track of all the objects we are implicitly
                 #adding to the DB. This is the only way I could find to keep
@@ -78,7 +77,7 @@ def put_model_obj(json_string):
                 list_of_objects.append(newObj)
                 return newObj.put()
             except KeyError as key:
-                #if globals() dict doesn't contain the relevant class
+                #if the model class doesn't contain the relevant class
                 newErr = SyntaxError('We don\'t support class type: %s' % clsType)
                 newErr.text = str(dct)
                 raise newErr
@@ -115,8 +114,6 @@ class _ExtendedJSONEncoder(json.JSONEncoder):
             for key,value in properties.iteritems():
                 #Ignore values that are null or are empty arrays
                 if value  or (isinstance(value, list) and len(value) > 0):
-                    if key == '__data':
-                        value = 'moo'
                     dictCopy[key] = value
             return dictCopy
         elif isinstance(obj, object):

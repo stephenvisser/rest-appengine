@@ -1,3 +1,52 @@
+/*
+Spinner jQuery plugin from https://gist.github.com/1290439
+
+You can now create a spinner using any of the variants below:
+
+$("#el").spin(); // Produces default Spinner using the text color of #el.
+$("#el").spin("small"); // Produces a 'small' Spinner using the text color of #el.
+$("#el").spin("large", "white"); // Produces a 'large' Spinner in white (or any valid CSS color).
+$("#el").spin({ ... }); // Produces a Spinner using your custom settings.
+
+$("#el").spin(false); // Kills the spinner.
+
+*/
+(function($) {
+	$.fn.spin = function(opts, color) {
+		var presets = {
+			"tiny": { lines: 8, length: 2, width: 2, radius: 3 },
+			"small": { lines: 8, length: 4, width: 3, radius: 5 },
+			"large": { lines: 10, length: 8, width: 4, radius: 8 }
+		};
+		if (Spinner) {
+			return this.each(function() {
+				var $this = $(this),
+					data = $this.data();
+
+				if (data.spinner) {
+					data.spinner.stop();
+					delete data.spinner;
+				}
+				if (opts !== false) {
+					if (typeof opts === "string") {
+						if (opts in presets) {
+							opts = presets[opts];
+						} else {
+							opts = {};
+						}
+						if (color) {
+							opts.color = color;
+						}
+					}
+					data.spinner = new Spinner($.extend({color: $this.css('color')}, opts)).spin(this);
+				}
+			});
+		} else {
+			throw "Spinner class not available.";
+		}
+	};
+})(jQuery);
+
 //Global variables for latitude and longitude of the client
 //This is helpful when the user types in 'here' as a value of
 //a new property.
@@ -161,7 +210,7 @@ EntityWidget = Backbone.View.extend({
 		}
 		else if(result=="file")
 		{
-			new FilePicker({propName:this.$('#new-key').val(), model:this.model}).$el.modal('show');
+			new FilePicker({destField:this.$('#new-value')}).$el.modal('show');
 			//Don't actually add something to the main... the 
 			//modal will do this.
 			return;
@@ -219,9 +268,9 @@ EntityWidget = Backbone.View.extend({
 					var newVal = $(document.createElement('td'));
 					var propVal = this.model.attributes[property];
 					
-					if (propVal.hasOwnProperty('__ref'))
+					if (/^\/[^\/]+\/[^\/]+$/.test(propVal))
 					{
-						newVal.html($(document.createElement('ul')).addClass('nav').html(new EntitySidebarWidget({model:new ModelEntity(propVal)}).el));
+						newVal.html('<iframe src="' + propVal + '"></iframe>');
 					}
 					else
 					{
@@ -503,30 +552,39 @@ FilePicker = Backbone.View.extend({
 	//This is the constructor of the view. From other tutorials, 
 	//it's common shorthand just to render the view.
 	initialize: function(){
-		this.propName = this.options.propName;
-		this.model = this.options.model;
+		this.destField = this.options.destField;
+		$.ajax('/prepare_upload',{success:_.bind(function(data){
+			this.$('.uploader').fileupload({
+				dropZone: this.$el,
+				autoUpload: true,
+				url:data,
+				done: _.bind(function (e, data) {
+					this.destField.val(data.result);
+					this.$el.modal('hide');
+				}, this)
+			});
+		},this)});
 		this.render();
 	},
 	//These two attributes define the type of HTML element this
 	//view is
+	destField:null,
 	tagName: 'div',
 	className: 'modal fade',
+	events:{
+		'click button': function()
+		{
+			this.$el.modal('hide');
+		}
+	},
 	//This defines what happens when this view is rendered.
 	render: function(){
 		//This takes a template from our HTML file and creates 
 		//The modal HTML from this markup
 		this.el.innerHTML = $('#modal-body-template').html();
-		this.$('#response').onchange = _.bind(function(){
-			alert(this.$('#response').html());
-		},this);
-		this.$('#file-upload-form').ajaxForm({ 
-			success:_.bind(function(responseText, statusText, xhr, $form){
-				this.model.set(this.propName,{__type:'Data',__id:parseInt(responseText, 10),__ref:true,__contentType:'audio/mpeg'});
-				this.$el.modal('hide');
-			},this)});
-	},
-	propName:null,
-	model:null
+
+		//this.$(".content-area").spin("small");
+	}
 });
 
 //JQuery to english: 'When the page is done loading, perform this function'
