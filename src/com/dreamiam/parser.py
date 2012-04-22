@@ -67,7 +67,8 @@ def put_model_obj(json_string):
             
             try:                
                 newObj = getattr(model, clsType)(**dictCopy)
-            
+                logging.getLogger().info('Done creating obj')
+
                 #We are keeping track of all the objects we are implicitly
                 #adding to the DB. This is the only way I could find to keep
                 #track of the actual objects so that we could return objects

@@ -3,7 +3,7 @@ Created on Mar 22, 2012
 
 @author: visser
 '''
-import re
+import re, logging
 
 from google.appengine.ext import ndb
 from dateutil import parser,tz

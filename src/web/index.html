@@ -5,10 +5,6 @@
 
 <link href="http://twitter.github.com/bootstrap/assets/css/bootstrap.css" rel="stylesheet">
 
-<script type="text/template" id="list-element">
-<td><%=key%></td><td> :</td> <td><%=value%></td><td> <button class="doSomething btn-small">Delete</button></td>
-</script>
-
 <style type="text/css">
 body {padding-top:20px;}
 </style>
@@ -33,6 +29,12 @@ body {padding-top:20px;}
 </div>
 </script>
 
+<script type="text/template" id="delete-alert-template">
+<div class="alert alert-error">
+  <a class="close" data-dismiss="alert">×</a>
+  <p>The item has been deleted, but is still visible here. If you want to keep it, just press <strong>save</strong></p>
+</div>
+</script>
 
 <script type="text/template" id="alert-template">
 <div class="alert">
@@ -61,13 +63,6 @@ body {padding-top:20px;}
     <div id="entity-control">
     </div> 
 
-</script>
-
-<script type="text/html" id="audio-player">
-<tr><td>
-<audio controls="controls">
-  <source src="<%=path%>" type="<%=type%>" />
-</audio></td></tr>
 </script>
 
 <script type="text/html" id="modal-body-template">

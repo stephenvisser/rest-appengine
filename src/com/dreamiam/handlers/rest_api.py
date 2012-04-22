@@ -67,8 +67,10 @@ class Rest(webapp2.RequestHandler):
         
     def _get_filters(self, kind):
         filters = self.request.get_all('filter')        
+        
+        logging.getLogger().info('All filters: %s' %(filters,))
         #Clever way to create a dictionary of propNames to values
-        return dict(self._convert_filter(kind, *item.split(':')) for item in filters)        
+        return [self._convert_filter(kind, *item.split(':')) for item in filters]       
 
     def _create_if_necessary(self, cls, currentEntity, values):
         if not currentEntity and self.request.get('non_exist') == 'create':
@@ -116,16 +118,18 @@ class Rest(webapp2.RequestHandler):
         #=======================================================================
         isLoadKeysOnly = self.request.get('load') != 'all'
         
-        query = cls.query()
-
         result = self._get_filters(cls);
 
-        for prop_name,filter_value in result.iteritems():
-            logging.getLogger().info("The filter is: " + repr(filter_value));
-            query = query.filter(getattr(cls,prop_name) == filter_value)
+        allFilters = []
+
+        for prop_name,filter_value in result:
+            allFilters.append(getattr(cls,prop_name) == filter_value)
+
+        logging.getLogger().info("The filters are: %s" % (repr(allFilters),));
+
 
         #Iterate through the responses. Implicitly fetches the results
-        allItems = query.fetch(keys_only=isLoadKeysOnly);
+        allItems =  cls.query().filter(*allFilters).fetch(keys_only=isLoadKeysOnly);
         
         #If the policy is to create an object if it doesn't already exist,
         #we should do that here

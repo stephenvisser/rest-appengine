@@ -1,52 +1,3 @@
-/*
-Spinner jQuery plugin from https://gist.github.com/1290439
-
-You can now create a spinner using any of the variants below:
-
-$("#el").spin(); // Produces default Spinner using the text color of #el.
-$("#el").spin("small"); // Produces a 'small' Spinner using the text color of #el.
-$("#el").spin("large", "white"); // Produces a 'large' Spinner in white (or any valid CSS color).
-$("#el").spin({ ... }); // Produces a Spinner using your custom settings.
-
-$("#el").spin(false); // Kills the spinner.
-
-*/
-(function($) {
-	$.fn.spin = function(opts, color) {
-		var presets = {
-			"tiny": { lines: 8, length: 2, width: 2, radius: 3 },
-			"small": { lines: 8, length: 4, width: 3, radius: 5 },
-			"large": { lines: 10, length: 8, width: 4, radius: 8 }
-		};
-		if (Spinner) {
-			return this.each(function() {
-				var $this = $(this),
-					data = $this.data();
-
-				if (data.spinner) {
-					data.spinner.stop();
-					delete data.spinner;
-				}
-				if (opts !== false) {
-					if (typeof opts === "string") {
-						if (opts in presets) {
-							opts = presets[opts];
-						} else {
-							opts = {};
-						}
-						if (color) {
-							opts.color = color;
-						}
-					}
-					data.spinner = new Spinner($.extend({color: $this.css('color')}, opts)).spin(this);
-				}
-			});
-		} else {
-			throw "Spinner class not available.";
-		}
-	};
-})(jQuery);
-
 //Global variables for latitude and longitude of the client
 //This is helpful when the user types in 'here' as a value of
 //a new property.
@@ -95,7 +46,8 @@ EntityWidget = Backbone.View.extend({
 		//We listen to the change and destroy backbone events on
 		//the model
 		this.model.on('change', function(){this.render();}, this);
-		this.model.on('destroy', function(){/*TODO: Do something!*/},this);
+		this.model.on('destroy', _.bind(function(){this.$el.prepend($('#delete-alert-template').html());
+},this));
 		this.render();
 	},
 	//This is a div HTML element at its core
@@ -252,47 +204,42 @@ EntityWidget = Backbone.View.extend({
 			//Empty all current elements
 			this.$('#prop-list').empty();
 			
-			if (this.model.attributes.__type == "Data")
+			//Go through all current properties and add a line for each.
+			for (var property in this.model.attributes)
 			{
-				this.$('#prop-list').append(_.template($('#audio-player').html(),{path:'/api/Data/'+this.model.attributes.__id,type:this.model.attributes.__contentType}));
+				var newRow = $(document.createElement('tr'));
+				var newName = $(document.createElement('td'));
+				newName.html(property);
+				newRow.append(newName);
+				var newVal = $(document.createElement('td'));
+				var propVal = this.model.attributes[property];
+				
+				if (/^\/[^\/]+\/[^\/]+$/.test(propVal))
+				{
+					newVal.html('<iframe src="' + propVal + '"></iframe>');
+				}
+				else
+				{
+					newVal.html(JSON.stringify(propVal));
+				}
+				newRow.append(newVal);
+				this.$('#prop-list').append(newRow);
 			}
-			else
-				{
-				//Go through all current properties and add a line for each.
-				for (var property in this.model.attributes)
-				{
-					var newRow = $(document.createElement('tr'));
-					var newName = $(document.createElement('td'));
-					newName.html(property);
-					newRow.append(newName);
-					var newVal = $(document.createElement('td'));
-					var propVal = this.model.attributes[property];
-					
-					if (/^\/[^\/]+\/[^\/]+$/.test(propVal))
-					{
-						newVal.html('<iframe src="' + propVal + '"></iframe>');
-					}
-					else
-					{
-						newVal.html(JSON.stringify(propVal));
-					}
-					newRow.append(newVal);
-					this.$('#prop-list').append(newRow);
-				}
-				
-				//Get the bottom form which will change according to 
-				//whether or not this is an entity that exists in the database
-				var controlForm = this.$('#entity-control');
-				var saveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-primary save").html("Save");
-				controlForm.html(saveButton);
-				
-				if (this.model.id)
-				{
-					var deleteButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-danger delete").html("Delete");
-					controlForm.append(deleteButton);
-					var retrieveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
-					controlForm.append(retrieveButton);
-				}
+			
+			//Get the bottom form which will change according to 
+			//whether or not this is an entity that exists in the database
+			var controlForm = this.$('#entity-control');
+			var saveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-primary save").html("Save");
+			controlForm.html(saveButton);
+			
+			if (this.model.id)
+			{
+				var deleteButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-danger delete").html("Delete");
+				controlForm.append(' ');
+				controlForm.append(deleteButton);
+				var retrieveButton = $(document.createElement('button')).prop("type","button").addClass("btn btn-warning retrieve").html("Retrieve");
+				controlForm.append(' ');
+				controlForm.append(retrieveButton);
 			}
 		}
 		else
@@ -533,7 +480,7 @@ Backbone.sync = function(method, model) {
 	else if (method=="delete")
 	{
 		//Creates the delete request
-		$.ajax({type:"DELETE",url:'/api/'+model.get('__type')+'/'+model.get('__id')});
+		$.ajax({type:"DELETE",url:'/api/'+model.get('__type')+'/'+model.get('__id')		});
 	}
 	else
 	{
@@ -541,8 +488,8 @@ Backbone.sync = function(method, model) {
 		$.ajax({url:'/api/'+model.get('__type')+'/'+model.get('__id'), success:function(data, textStatus, jqXHR){
 			//This will make sure that properties are also un-set as appropriate
 			model.clear({silent: true});
-			model.set(data);
-			model.id = data.__id;
+			model.set(data[0]);
+			model.id = data[0].__id;
 			}
 		});
 	}
@@ -582,8 +529,6 @@ FilePicker = Backbone.View.extend({
 		//This takes a template from our HTML file and creates 
 		//The modal HTML from this markup
 		this.el.innerHTML = $('#modal-body-template').html();
-
-		//this.$(".content-area").spin("small");
 	}
 });
 
