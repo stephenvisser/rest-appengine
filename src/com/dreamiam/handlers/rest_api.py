@@ -7,6 +7,7 @@ Created on Mar 23, 2012
 import webapp2
 import logging
 import re
+import urlparse
 
 from google.appengine.ext.ndb import metadata
 from google.appengine.ext import ndb
@@ -59,18 +60,38 @@ class Rest(webapp2.RequestHandler):
             #Write back the id of the new object
         self.response.write(str(newObj.key.id()))
         
-    def _convert_filter(self, kind, propName, value):
-        actualProp = getattr(kind, propName)
-        actualProp._validate(value)
+    def _convert_filter(self, kind, aFilter):
+        match = re.match(r'^(?P<name>\w+)(?P<operator>!=|==|>|<|>=|<=)(?P<value>.+)$', aFilter)
+        if not match:
+            raise MalformedURLException("Something wrong with filter: %s" % (aFilter,))
+
+        actualProp = getattr(kind, match.group('name'))
         logging.getLogger().info("The prop is: " + repr(actualProp))
-        return propName, actualProp._to_base_type(value);
+        actualVal = actualProp._to_base_type(match.group('value'));
+        actualOp = match.group('operator')
+        
+        if actualOp == '!=':
+            return actualProp != actualVal
+        if actualOp == '==':
+            return actualProp == actualVal
+        if actualOp == '>':
+            return actualProp > actualVal
+        if actualOp == '<':
+            return actualProp < actualVal
+        if actualOp == '>=':
+            return actualProp >= actualVal
+        if actualOp == '<=':
+            return actualProp <= actualVal
         
     def _get_filters(self, kind):
-        filters = self.request.get_all('filter')        
+        filterString = self.request.get('filter')
+        if filterString:
+            filters = urlparse.unquote(filterString).split('&')        
         
-        logging.getLogger().info('All filters: %s' %(filters,))
-        #Clever way to create a dictionary of propNames to values
-        return [self._convert_filter(kind, *item.split(':')) for item in filters]       
+            logging.getLogger().info('All filters: %s' %(filters,))
+            #Clever way to create a dictionary of propNames to values
+            return [self._convert_filter(kind, item) for item in filters]
+        return []   
 
     def _create_if_necessary(self, cls, currentEntity, values):
         if not currentEntity and self.request.get('non_exist') == 'create':
@@ -99,7 +120,7 @@ class Rest(webapp2.RequestHandler):
         if entireObj:
             #Optimistically putting the obj as a result
             resultArray.append(entireObj)
-            for prop_name,filter_value in result.iteritems():
+            for prop_name,filter_value in result:
                 if getattr(entireObj,prop_name) != filter_value:
                     #Failed to match a filter so remove it as a match
                     del resultArray[0]
@@ -120,16 +141,10 @@ class Rest(webapp2.RequestHandler):
         
         result = self._get_filters(cls);
 
-        allFilters = []
-
-        for prop_name,filter_value in result:
-            allFilters.append(getattr(cls,prop_name) == filter_value)
-
-        logging.getLogger().info("The filters are: %s" % (repr(allFilters),));
-
+        logging.getLogger().info("The filters are: %s" % (repr(result),));
 
         #Iterate through the responses. Implicitly fetches the results
-        allItems =  cls.query().filter(*allFilters).fetch(keys_only=isLoadKeysOnly);
+        allItems =  cls.query().filter(*result).fetch(keys_only=isLoadKeysOnly);
         
         #If the policy is to create an object if it doesn't already exist,
         #we should do that here

@@ -1,0 +1,1 @@
+This is an AppEngine project that can be hosted.
