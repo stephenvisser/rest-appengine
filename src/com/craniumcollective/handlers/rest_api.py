@@ -8,12 +8,21 @@ import webapp2
 import logging
 import re
 import urlparse
+import operator
+import json
 
 from google.appengine.ext.ndb import metadata
 from google.appengine.ext import ndb
 
-from com.dreamiam import parser
-from com.dreamiam import model
+from com.craniumcollective import parser
+from com.craniumcollective import model
+
+operator_dict = {'>': operator.gt,
+                 '>=': operator.ge,
+                 '==': operator.eq,
+                 '!=':operator.ne,
+                 '<':operator.lt,
+                 '<=':operator.le}
 
 class MalformedURLException(Exception):
     '''
@@ -28,16 +37,6 @@ class Rest(webapp2.RequestHandler):
     a certain degree
     '''
     
-    def _handle_data(self, body, content_type):
-        match = re.match(r'^/api(?:/(?P<entity>\w+)(?:/(?P<id>\d+))?)$',
-                     self.request.path_info)
-        if not match:
-            raise MalformedURLException("If you are posting data, you need to specify the class type. Most likely 'Data'")
-
-        newObj = getattr(model, match.group('entity'))(data=body,contentType=content_type, id=match.group('id'))
-        newObj.put()
-        return newObj
-        
     def post(self):
         '''Handles POST requests'''
 
@@ -45,19 +44,13 @@ class Rest(webapp2.RequestHandler):
             match = re.match(r'^/api$',
                          self.request.path_info)
             if not match:
-                raise MalformedURLException("If you are posting data, set content-type as appropriate. If you're using json, check your url: should be '/api'")
-            logging.getLogger().info("Do something here" + str(dir(parser)))
+                raise MalformedURLException("The only supported POST url is: '/api'")
             #Simple: Load the JSON values that were sent to the server
             newObj = parser.put_model_obj(self.request.body)
-        elif self.request.content_type == 'multipart/form-data':
-            content = self.request.POST.items()[0][1];
-            newObj = self._handle_data(content.value, content.type)
-        else:    
-            #We store all others as data. This means that we remember the content
-            #type and host the data at its own URL instead of embedding it in JSON
-            newObj = self._handle_data(self.request.body, self.request.content_type)
+        else:  
+            raise MalformedURLException("All data must be posted using JSON. If you want to upload some data, use the file_uploader mechanism.")  
                 
-            #Write back the id of the new object
+        #Write back the id of the new object
         self.response.write(str(newObj.key.id()))
         
     def _convert_filter(self, kind, aFilter):
@@ -66,26 +59,19 @@ class Rest(webapp2.RequestHandler):
             raise MalformedURLException("Something wrong with filter: %s" % (aFilter,))
 
         actualProp = getattr(kind, match.group('name'))
-        logging.getLogger().info("The prop is: " + repr(actualProp))
         actualVal = actualProp._to_base_type(match.group('value'));
-        actualOp = match.group('operator')
-        
-        if actualOp == '!=':
-            return actualProp != actualVal
-        if actualOp == '==':
-            return actualProp == actualVal
-        if actualOp == '>':
-            return actualProp > actualVal
-        if actualOp == '<':
-            return actualProp < actualVal
-        if actualOp == '>=':
-            return actualProp >= actualVal
-        if actualOp == '<=':
-            return actualProp <= actualVal
+
+        #this searches through the operator dictionary for the appropriate
+        #operator function and then calls it with the two operands        
+        return operator_dict[match.group('operator')](actualProp, actualVal)
         
     def _get_filters(self, kind):
+        '''
+        There can be only one filter parameter in the URL
+        '''
         filterString = self.request.get('filter')
         if filterString:
+            #Do the required url deconversion.
             filters = urlparse.unquote(filterString).split('&')        
         
             logging.getLogger().info('All filters: %s' %(filters,))
@@ -93,43 +79,19 @@ class Rest(webapp2.RequestHandler):
             return [self._convert_filter(kind, item) for item in filters]
         return []   
 
-    def _create_if_necessary(self, cls, currentEntity, values):
-        if not currentEntity and self.request.get('non_exist') == 'create':
+    def _create_if_necessary(self, cls, currentEntity):
+        default_properties = self.request.get('default');
+        if not currentEntity and default_properties:
             #If the policy is to create an object if it doesn't already exist,
             #we should do that here
-            brandNewObj = cls(**values)
+            initialValues = json.loads('{' + default_properties + '}')
+            brandNewObj = cls(**initialValues)
             bnoKey = brandNewObj.put()
             if self.request.get('load') != 'all':
                 currentEntity = [bnoKey]
             else:
                 currentEntity = [brandNewObj]
         return currentEntity;
-
-    def _perform_filter_on_key(self, key):
-        '''Performs a search for all items in a filter'''
-                
-        #Clever way to create a dictionary of propNames to values
-        result = self._get_filters(key.kind())
-        
-        #This is what we use to determine if it matches any possible
-        #filters the user may have set
-        resultArray = []
-        #Start by retrieving the object
-        entireObj = key.get()
-        #Change to an array if this object doesn't exist
-        if entireObj:
-            #Optimistically putting the obj as a result
-            resultArray.append(entireObj)
-            for prop_name,filter_value in result:
-                if getattr(entireObj,prop_name) != filter_value:
-                    #Failed to match a filter so remove it as a match
-                    del resultArray[0]
-                    break
-
-        #Need to make sure the ID is set on any future objects
-        result['key'] = key
-
-        return self._create_if_necessary(getattr(model, key.kind()), resultArray, result);
 
     def _perform_filter(self, cls):
         '''Performs a search for all items in a filter'''
@@ -139,16 +101,16 @@ class Rest(webapp2.RequestHandler):
         #=======================================================================
         isLoadKeysOnly = self.request.get('load') != 'all'
         
-        result = self._get_filters(cls);
+        allFilters = self._get_filters(cls);
 
-        logging.getLogger().info("The filters are: %s" % (repr(result),));
+        logging.getLogger().info("The filters are: %s" % (repr(allFilters),));
 
         #Iterate through the responses. Implicitly fetches the results
-        allItems =  cls.query().filter(*result).fetch(keys_only=isLoadKeysOnly);
+        allItems =  cls.query().filter(*allFilters).fetch(keys_only=isLoadKeysOnly);
         
         #If the policy is to create an object if it doesn't already exist,
         #we should do that here
-        return self._create_if_necessary(cls, allItems, result)
+        return self._create_if_necessary(cls, allItems)
 
     def _write_all_objects_of_type(self, model_type):
         '''This finds all objects of a given type and writes them as a response'''
@@ -160,30 +122,20 @@ class Rest(webapp2.RequestHandler):
         
     def _write_object_with_id(self, model_type, model_id):
         '''
-        Writes an entity back to the client based on id. If the entity is
-        of type Data, just the data will be written with the content-type
-        with which it was stored. Otherwise, it will be json
+        Writes an entity back to the client based on id. The value written will
+        always be in JSON format. All filters will be ignored. It will by default 
+        perform a load of all properties. Why else would you call this?
         '''
 
-        if model_type == 'Data':
-            #Convert the content-type to string or else badness happens
-            data = ndb.Key(model_type, model_id).get()
-            self.response.headers['Content-Type'] = str(data.contentType)
-            self.response.write(data.data)
-        else:
-            #Create the key
-            obj_key = ndb.Key(model_type, model_id)
-            
-            #Do some weird voodoo magic to do the binding of
-            #various optional parameters
-            obj_result = self._perform_filter_on_key(obj_key)
+        #Simply get the object using NDB's class methods
+        obj_result = [getattr(model, model_type).get_by_id(model_id)]
 
-            #We need to make these objects return arrays too
-            objectString = parser.get_json_string(obj_result)
-                
-            #Return the values in the entity dictionary
-            self.response.headers['Content-Type'] = "application/json"
-            self.response.write(objectString)
+        #We need to make these objects return arrays too
+        objectString = parser.get_json_string(obj_result)
+            
+        #Return the values in the entity dictionary
+        self.response.headers['Content-Type'] = "application/json"
+        self.response.write(objectString)
             
     def _write_all(self):
         '''Writes every single entity stored in the DB'''

@@ -6,7 +6,6 @@ Created on Apr 13, 2012
 
 import webapp2
 from google.appengine.ext.webapp import blobstore_handlers
-import logging
 import urllib
 import json
 

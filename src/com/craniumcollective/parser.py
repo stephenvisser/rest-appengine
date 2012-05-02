@@ -6,7 +6,7 @@ Created on Mar 22, 2012
 import json
 import logging
 
-from com.dreamiam import model
+from com.craniumcollective import model
 
 from google.appengine.ext import ndb
 

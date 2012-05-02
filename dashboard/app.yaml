@@ -13,4 +13,4 @@ handlers:
   static_dir: resources
   
 - url: .*
-  script: com.dreamiam.handlers.app
+  script: com.craniumcollective.handlers.app
