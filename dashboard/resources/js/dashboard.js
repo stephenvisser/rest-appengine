@@ -534,13 +534,6 @@ FilePicker = Backbone.View.extend({
 
 //JQuery to english: 'When the page is done loading, perform this function'
 $(function(){
-	//Find our current location. This will not work on all browsers,
-	//so we should do more checking here eventually.
-	navigator.geolocation.getCurrentPosition(function (position) {
-		latitude = position.coords.latitude;
-		longitude = position.coords.longitude;
-	});
-	
 	//Create the sidebar
 	var parentView = new ExplorerWidget();
 	
