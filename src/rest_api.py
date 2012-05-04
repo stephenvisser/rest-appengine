@@ -14,8 +14,8 @@ import json
 from google.appengine.ext.ndb import metadata
 from google.appengine.ext import ndb
 
-from com.craniumcollective import parser
-from com.craniumcollective import model
+import parser
+import model
 
 operator_dict = {'>': operator.gt,
                  '>=': operator.ge,
