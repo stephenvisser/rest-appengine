@@ -1,4 +1,4 @@
-application: edmonton-corn-maze
+application: rest-dashboard-demo
 version: 1
 runtime: python27
 api_version: 1
@@ -13,4 +13,4 @@ handlers:
   static_dir: resources
   
 - url: .*
-  script: com.craniumcollective.handlers.app
+  script: app
