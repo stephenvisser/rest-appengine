@@ -6,8 +6,8 @@ threadsafe: true
 
 handlers:
 - url: /
-  static_files: resources/dashboard.html
-  upload: resources/dashboard.html
+  static_files: dashboard.html
+  upload: dashboard.html
 
 - url: /resources
   static_dir: resources
