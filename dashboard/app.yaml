@@ -13,4 +13,4 @@ handlers:
   static_dir: resources
   
 - url: .*
-  script: app
+  script: appengine_config.app
