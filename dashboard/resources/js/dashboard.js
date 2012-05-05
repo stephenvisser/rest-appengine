@@ -505,6 +505,7 @@ FilePicker = Backbone.View.extend({
 				dropZone: this.$el,
 				autoUpload: true,
 				url:data,
+				paramName:'soundbyte',
 				done: _.bind(function (e, data) {
 					this.destField.val(data.result);
 					this.$el.modal('hide');

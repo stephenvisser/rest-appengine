@@ -32,7 +32,7 @@ class Upload(blobstore_handlers.BlobstoreUploadHandler):
         any gets back to the form
         '''
         
-        upload_files = self.get_uploads('files[]')  # 'file' is file upload field in the form
+        upload_files = self.get_uploads('soundbyte')  # 'file' is file upload field in the form
         blob_info = upload_files[0]
         self.response.headers['Content-Type'] = "application/json"
         self.response.out.write(json.dumps('/file_download/' + str(blob_info.key())))
