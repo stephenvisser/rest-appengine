@@ -72,13 +72,9 @@ class Rest(webapp2.RequestHandler):
         '''
         filterString = self.request.get('filter')
         if filterString:
-            #Do the required url deconversion.
-            filters = filterString.split('&')        
-        
-            logging.getLogger().info('All filters: %s' %(filters,))
-            #Clever way to create a dictionary of propNames to values
-            return [self._convert_filter(kind, item) for item in filters]
-        return []   
+            #Clever way to create the filters as generator expression
+            return (self._convert_filter(kind, item) for item in filterString.split('&'))
+        return ()   
 
     def _create_if_necessary(self, cls, currentEntity):
         default_properties = self.request.get('default');
@@ -93,6 +89,26 @@ class Rest(webapp2.RequestHandler):
             else:
                 currentEntity = [brandNewObj]
         return currentEntity;
+    
+    def _convert_order(self, kind, property):
+        match = re.match(r'^(?P<desc>-)?(?P<prop>.+)$', property)
+        if not match:
+            raise MalformedURLException("Something wrong with filter: %s" % (aFilter,))
+
+        actualProp = getattr(kind, match.group('prop'))
+        descending = match.group('desc');
+
+        if descending:
+            return -actualProp
+        else:
+            return actualProp
+    
+    def _get_order(self, cls):
+        orderString = self.request.get('order')
+        if orderString:        
+            #Clever way to create the filters
+            return (self._convert_order(cls, item) for item in orderString.split(','))
+        return ()   
 
     def _perform_filter(self, cls):
         '''Performs a search for all items in a filter'''
@@ -102,12 +118,8 @@ class Rest(webapp2.RequestHandler):
         #=======================================================================
         isLoadKeysOnly = self.request.get('load') != 'all'
         
-        allFilters = self._get_filters(cls);
-
-        logging.getLogger().info("The filters are: %s" % (repr(allFilters),));
-
         #Iterate through the responses. Implicitly fetches the results
-        allItems =  cls.query().filter(*allFilters).fetch(keys_only=isLoadKeysOnly);
+        allItems =  cls.query(*self._get_filters(cls)).order(*self._get_order(cls)).fetch(keys_only=isLoadKeysOnly);
         
         #If the policy is to create an object if it doesn't already exist,
         #we should do that here
