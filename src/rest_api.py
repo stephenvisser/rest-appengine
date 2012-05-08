@@ -18,12 +18,12 @@ from google.appengine.ext import ndb
 import parser
 import model
 
-operator_dict = {u'>': operator.gt,
-                 u'≥': operator.ge,
-                 u'⩵': operator.eq,
-                 u'≠':operator.ne,
-                 u'<':operator.lt,
-                 u'≤':operator.le}
+operator_dict = {'>': operator.gt,
+                 '>=': operator.ge,
+                 '=': operator.eq,
+                 '!=':operator.ne,
+                 '<':operator.lt,
+                 '<=':operator.le}
 
 class MalformedURLException(Exception):
     '''
@@ -55,7 +55,7 @@ class Rest(webapp2.RequestHandler):
         self.response.write(str(newObj.key.id()))
         
     def _convert_filter(self, kind, aFilter):
-        match = re.match(ur'^(?P<name>\w+)(?P<operator>≠|⩵|>|<|≥|≥)(?P<value>.+)$', aFilter)
+        match = re.match(r'^(?P<name>\w+)(?P<operator>!=|=|>|<|>=|<=)(?P<value>.+)$', aFilter)
         if not match:
             raise MalformedURLException("Something wrong with filter: %s" % (aFilter,))
 
@@ -73,7 +73,7 @@ class Rest(webapp2.RequestHandler):
         filterString = self.request.get('filter')
         if filterString:
             #Do the required url deconversion.
-            filters = filterString.split(u'∧')        
+            filters = filterString.split('&')        
         
             logging.getLogger().info('All filters: %s' %(filters,))
             #Clever way to create a dictionary of propNames to values
