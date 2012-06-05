@@ -1,5 +1,6 @@
 # REST API for App Engine
-The app allows users to record their dreams.
+
+A reusable REST API for GAE. See the __[most recent version LIVE](http://rest-dashboard-demo.appspot.com/)__
 
 ### Posting Data
 
@@ -44,17 +45,17 @@ Parameters | Possible Values
 -----------|-------
 PROPERTY_NAME | The name of the property. 
 VALUE      | If the `__type` of this property object isn't simple, then this value must be the numerical `__id`. Otherwise, this value must be the value of the primitive type to compare to.
+OPERATOR   | Can be one of `==`, `!=`, `>`, `<`, `>=`, `<=`
 
 __Note:__ Multiple filters can be chained together by simply having multiple filter attributes
 
 __Note:__ Currently the only supported property types are integers, strings and reference types (where the ID of the object is specified) 
 
-    ?default=<PROP_NAME>:<VALUE>(,<PROP_NAME>:<VALUE>)
+    ?default=JSON_OBJ
     
 Parameters | Possible Values
 -----------|-------
-PROP_NAME | The 
-VALUE | Default is `nothing`. If `create`, we will create a new object with the given filters if the object doesn't exist.
+JSON_OBJ | Must be formatted as a JSON object. This means curly brackets and quoted keys. The values included in the dictionary will populate the object.
 
 __Note:__ If we are filtering on an object but it doesn't exist, we can use this to set its default values. It does nothing when the object is fully specified or when doing a classless search.
 
@@ -103,3 +104,33 @@ __Note:__ If an object is fully-specified, that object will be removed
 ---------------
 
 __Note:__ Put is not supported. Since creating an object is not [indempotent](http://en.wikipedia.org/wiki/Idempotent) using our current API, we will not support this. See [this](http://stackoverflow.com/questions/630453/put-vs-post-in-rest) for a discussion of which (or both) people tend to support
+
+# Dashboard
+
+The REST API also has a useful dashboard which can be used to view which Objects exist.
+
+## Model
+
+The model is defined in the `/dashboard/model.py` file. 
+
+## Viewing / Searching
+
+Use the box in the upper-left corner. You just specify the URL of interest. Some examples:
+
+    ?load=all
+    
+This will load all existing elements in the DB
+
+    /User?filter=twitterHandle%3d%3dBOBBY&default={"twitterHandle":"abc123"}
+    
+This creates a User if the filter isn't satisfied using the entries in the JSON object as initial values
+
+## Creating new objects
+
+The text box in the bottom left can be used to create new objects. Just enter the name of the model object you want to create (e.g. `Entry`). Once it is created, use the right-most panel to enter properties by key name and value.
+
+## Uploading files
+
+There are a few special keywords in the property value field. The one of most interest is `file` When you press enter, you can drag and drop a file of interest which will be automatically uploaded to the server.
+
+__TODO:__ Since this is a WIP, I haven't implemented error handling. If things break, the user interface won't tell you what happened.
