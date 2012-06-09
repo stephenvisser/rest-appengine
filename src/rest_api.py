@@ -191,20 +191,27 @@ class Rest(webapp2.RequestHandler):
             object_id = match.group('id')
             if object_type:
                 property_to_delete = self.request.get('propogate')
+                delete_props = property_to_delete.split(',') if property_to_delete else []
                 if object_id:
                     deleteObjKey = ndb.Key(object_type, int(object_id))
                     returned_obj = deleteObjKey.get()
                     logging.getLogger().warn('Attempting to delete: %s, with id: %s and got this: %s' %(object_type, object_id, returned_obj))
-                    if property_to_delete:
-                        getattr(returned_obj,property_to_delete).delete()
+                    for prop in delete_props:
+                        res = getattr(returned_obj,prop)
+                        if res:
+                            res.delete()
                     deleteObjKey.delete()
                 else:
                     if self.request.get('force') == 'yes':
-                        keysOnlyBool = property_to_delete == None
-                        for key in getattr(model, object_type).query().iter(keys_only=keysOnlyBool):
-                            if property_to_delete:
-                                getattr(key,property_to_delete).delete()
-                            key.delete()
+                        if delete_props:
+                            for obj in getattr(model, object_type).query().iter():
+                                for prop in delete_props:
+                                    res = getattr(obj,prop)
+                                    if res:
+                                        res.delete()
+                                obj.key.delete()
+                        else:
+                          ndb.delete_multi(getattr(model,object_type).query().fetch(keys_only=True))
                     else:
                         raise SyntaxError("MUST use 'force'='yes' to do this mode of delete")
             else:
