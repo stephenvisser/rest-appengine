@@ -201,7 +201,7 @@ class Rest(webapp2.RequestHandler):
                 else:
                     if self.request.get('force') == 'yes':
                         keysOnlyBool = property_to_delete == None
-                        for key in getattr(model, object_type).all(keys_only=keysOnlyBool):
+                        for key in getattr(model, object_type).query(keys_only=keysOnlyBool):
                             if property_to_delete:
                                 getattr(key,property_to_delete).delete()
                             key.delete()
