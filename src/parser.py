@@ -5,9 +5,7 @@ Created on Mar 22, 2012
 '''
 import json
 import logging
-
 import model
-
 from google.appengine.ext import ndb
 
 CLASS_TYPE_STR = '__type'
